@@ -108,6 +108,32 @@ The metrics endpoint is available at:
 
     GET /api/v1/metrics
 
+## Authentication and rate limiting
+
+Protected endpoints require the `X-API-Key` header. Set `API_KEY` in `.env` before starting the API.
+
+The API uses a Redis-backed fixed-window rate limiter. Defaults are **60 requests per 60 seconds per API key** and can be configured with `RATE_LIMIT_REQUESTS` and `RATE_LIMIT_WINDOW_SECONDS`.
+
+Example:
+
+    curl -H "X-API-Key: change-this-development-key" http://127.0.0.1:8000/api/v1/metrics
+
+Rate-limit responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` headers. When Redis is unavailable, the limiter fails open so an infrastructure dependency does not take the API offline.
+
+## Structured errors
+
+API errors use a consistent JSON envelope with an error code and request ID.
+
+    {
+      "error": {
+        "code": "UNAUTHORIZED",
+        "message": "A valid X-API-Key header is required.",
+        "request_id": "..."
+      }
+    }
+
+Validation failures return `VALIDATION_ERROR`; invalid prediction input returns `PREDICTION_INPUT_ERROR`; unavailable prediction history returns `DATABASE_UNAVAILABLE`.
+
 ## Prediction API
 
     POST /api/v1/predict
