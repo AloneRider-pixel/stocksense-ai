@@ -13,6 +13,7 @@ export default function App() {
   const [market, setMarket] = useState(null);
   const [prediction, setPrediction] = useState(null);
   const [history, setHistory] = useState([]);
+  const [evaluation, setEvaluation] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -27,6 +28,10 @@ export default function App() {
     api("/predictions?limit=10")
       .then(setHistory)
       .catch(() => setHistory([]));
+
+    api("/predictions/evaluation")
+      .then(setEvaluation)
+      .catch(() => setEvaluation(null));
 
     api("/stocks/" + symbol + "/history?limit=1")
       .then((result) => setMarket(result[0] || null))
@@ -91,6 +96,7 @@ export default function App() {
 
       setPrediction(result);
       setHistory(await api("/predictions?limit=10"));
+      setEvaluation(await api("/predictions/evaluation"));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -124,6 +130,7 @@ export default function App() {
       market={market}
       prediction={prediction}
       history={history}
+      evaluation={evaluation}
       busy={busy}
       error={error}
       onPredict={runPrediction}
