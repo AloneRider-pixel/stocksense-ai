@@ -70,7 +70,11 @@ def walk_forward_evaluate(
             rows.append(
                 {
                     "fold": fold,
-                    "prediction_date": str(row["date"]) if "date" in row else row_index,
+                    "prediction_date": (
+                        row["date"].date().isoformat()
+                        if "date" in row and hasattr(row["date"], "date")
+                        else str(row_index)
+                    ),
                     "current_close": previous_close,
                     "predicted_close": predicted_close,
                     "actual_close": actual_close,
