@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from arq import Retry
 
 from app.core.config import settings
@@ -9,7 +11,7 @@ from app.market_data.factory import get_market_data_provider
 from app.market_data.ingestion import MarketDataIngestionService
 
 
-async def refresh_market_data(ctx, symbol: str) -> dict[str, int | str]:
+def _ingest_symbol(symbol: str) -> dict[str, int | str]:
     session = get_session()
     try:
         service = MarketDataIngestionService(
@@ -18,10 +20,15 @@ async def refresh_market_data(ctx, symbol: str) -> dict[str, int | str]:
             prediction_repository=PredictionRepository(session),
         )
         return service.ingest(symbol, limit=settings.market_data_max_rows)
-    except Exception as exc:
-        raise Retry(defer=ctx["job_try"] * 15) from exc
     finally:
         session.close()
+
+
+async def refresh_market_data(ctx, symbol: str) -> dict[str, int | str]:
+    try:
+        return await asyncio.to_thread(_ingest_symbol, symbol)
+    except Exception as exc:
+        raise Retry(defer=ctx["job_try"] * 15) from exc
 
 
 async def refresh_configured_markets(ctx) -> dict[str, int]:
