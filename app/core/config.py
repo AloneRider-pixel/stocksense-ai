@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     allowed_hosts: str = "*"
 
+    market_data_provider: str = "twelve_data"
+    twelve_data_api_key: str = ""
+    twelve_data_base_url: str = "https://api.twelvedata.com"
+    market_data_max_rows: int = 5000
+    market_data_timeout_seconds: float = 10.0
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property
