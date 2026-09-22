@@ -27,13 +27,11 @@ class RateLimiter:
                 self.client.expire(key, window)
 
             remaining = max(settings.rate_limit_requests - count, 0)
-            if count > settings.rate_limit_requests:
-                current = int(time.time())
-                retry_after = window - (current % window)
-                return False, max(retry_after, 1)
-
-            return True, remaining
+            return count <= settings.rate_limit_requests, remaining
         except RedisError:
-            # Fail open: availability is preferred over rejecting requests because
-            # the optional rate-limit dependency is temporarily unavailable.
             return True, settings.rate_limit_requests
+
+    def retry_after(self) -> int:
+        window = settings.rate_limit_window_seconds
+        now = int(time.time())
+        return max(window - (now % window), 1)
