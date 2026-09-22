@@ -10,7 +10,7 @@ class MarketBar(BaseModel):
 
 class PredictionRequest(BaseModel):
     symbol: str = Field(min_length=1, max_length=16)
-    history: list[MarketBar] = Field(min_length=10)
+    history: list[MarketBar] = Field(min_length=11)
 
 
 class PredictionResponse(BaseModel):
