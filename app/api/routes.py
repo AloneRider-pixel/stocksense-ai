@@ -14,6 +14,7 @@ from app.api.schemas import (
     PredictionResponse,
 )
 from app.auth.dependencies import get_current_user
+from app.core.config import settings
 from app.db.database import get_session
 from app.db.repository import MarketDataRepository, PredictionRepository
 from app.market_data.factory import get_market_data_provider
@@ -93,7 +94,7 @@ def stock_history(
             not stored
             or stored[-1].ingested_at
             < datetime.now(timezone.utc)
-            - timedelta(minutes=__import__("app.core.config", fromlist=["settings"]).settings.market_data_refresh_interval_minutes)
+            - timedelta(minutes=settings.market_data_refresh_interval_minutes)
         )
 
         if len(stored) < limit or stale:
