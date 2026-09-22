@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.rate_limit_dependency import enforce_rate_limit
 from app.api.schemas import (
     PredictionHistoryItem,
     PredictionRequest,
@@ -26,7 +27,7 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "stocksense-ai"}
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(enforce_rate_limit)])
 def metrics() -> dict[str, object]:
     metrics_path = Path("models/metrics.json")
     if not metrics_path.exists():
@@ -38,7 +39,11 @@ def metrics() -> dict[str, object]:
     return json.loads(metrics_path.read_text(encoding="utf-8"))
 
 
-@router.post("/predict", response_model=PredictionResponse)
+@router.post(
+    "/predict",
+    response_model=PredictionResponse,
+    dependencies=[Depends(enforce_rate_limit)],
+)
 def predict(request: PredictionRequest) -> PredictionResponse:
     symbol = request.symbol.upper()
     history = [bar.model_dump() for bar in request.history]
@@ -50,7 +55,17 @@ def predict(request: PredictionRequest) -> PredictionResponse:
         cached["persisted"] = False
         return PredictionResponse(**cached)
 
-    result = predictor.predict(symbol=symbol, history=history)
+    try:
+        result = predictor.predict(symbol=symbol, history=history)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "PREDICTION_INPUT_ERROR",
+                "message": str(exc),
+            },
+        ) from exc
+
     cache.set(cache_key, result)
 
     persisted = False
@@ -73,7 +88,11 @@ def predict(request: PredictionRequest) -> PredictionResponse:
     return PredictionResponse(**result)
 
 
-@router.get("/predictions", response_model=list[PredictionHistoryItem])
+@router.get(
+    "/predictions",
+    response_model=list[PredictionHistoryItem],
+    dependencies=[Depends(enforce_rate_limit)],
+)
 def prediction_history(
     symbol: str | None = Query(default=None, max_length=16),
     limit: int = Query(default=20, ge=1, le=100),
@@ -85,7 +104,13 @@ def prediction_history(
             limit=limit,
         )
         return [PredictionHistoryItem.model_validate(record) for record in records]
-    except SQLAlchemyError:
-        return []
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "DATABASE_UNAVAILABLE",
+                "message": "Prediction history is temporarily unavailable.",
+            },
+        ) from exc
     finally:
         session.close()
