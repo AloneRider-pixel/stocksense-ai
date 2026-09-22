@@ -33,6 +33,13 @@ def upgrade() -> None:
     op.create_index("ix_market_bars_date", "market_bars", ["date"])
     op.create_index("ix_market_bars_ingested_at", "market_bars", ["ingested_at"])
 
+    op.alter_column(
+        "prediction_records",
+        "symbol",
+        existing_type=sa.String(length=16),
+        type_=sa.String(length=32),
+    )
+
     op.add_column(
         "prediction_records",
         sa.Column("prediction_date", sa.Date(), nullable=True),
@@ -62,8 +69,6 @@ def upgrade() -> None:
         sa.Column("evaluated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
-    # Existing rows pre-date dated predictions. Backfill from created_at so the
-    # migration remains valid against earlier local/demo environments.
     op.execute(
         "UPDATE prediction_records SET prediction_date = CAST(created_at AS DATE) "
         "WHERE prediction_date IS NULL"
@@ -89,8 +94,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_prediction_records_actual_date", table_name="prediction_records")
-    op.drop_index("ix_prediction_records_prediction_date", table_name="prediction_records")
+    op.drop_index(
+        "ix_prediction_records_actual_date",
+        table_name="prediction_records",
+    )
+    op.drop_index(
+        "ix_prediction_records_prediction_date",
+        table_name="prediction_records",
+    )
 
     for column in (
         "evaluated_at",
@@ -103,7 +114,23 @@ def downgrade() -> None:
     ):
         op.drop_column("prediction_records", column)
 
-    op.drop_index("ix_market_bars_ingested_at", table_name="market_bars")
-    op.drop_index("ix_market_bars_date", table_name="market_bars")
-    op.drop_index("ix_market_bars_symbol", table_name="market_bars")
+    op.alter_column(
+        "prediction_records",
+        "symbol",
+        existing_type=sa.String(length=32),
+        type_=sa.String(length=16),
+    )
+
+    op.drop_index(
+        "ix_market_bars_ingested_at",
+        table_name="market_bars",
+    )
+    op.drop_index(
+        "ix_market_bars_date",
+        table_name="market_bars",
+    )
+    op.drop_index(
+        "ix_market_bars_symbol",
+        table_name="market_bars",
+    )
     op.drop_table("market_bars")
