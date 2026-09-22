@@ -18,11 +18,12 @@ class TwelveDataProvider:
 
     def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or settings.twelve_data_api_key
-        if not self.api_key:
-            raise TwelveDataError("TWELVE_DATA_API_KEY is not configured")
         self.base_url = settings.twelve_data_base_url.rstrip("/")
 
     def history(self, symbol: str, limit: int = 100) -> list[MarketBar]:
+        if not self.api_key:
+            raise TwelveDataError("TWELVE_DATA_API_KEY is not configured")
+
         params = {
             "symbol": symbol,
             "interval": "1day",
