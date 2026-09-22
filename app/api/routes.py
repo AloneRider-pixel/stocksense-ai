@@ -12,19 +12,49 @@ from app.api.schemas import (
     PredictionRequest,
     PredictionResponse,
 )
+from app.auth.dependencies import get_current_user
 from app.db.database import get_session
 from app.db.repository import PredictionRepository
+from app.market_data.csv_provider import CSVMarketDataProvider
+from app.market_data.service import MarketDataService
 from app.services.cache import PredictionCache
 from app.services.predictor import Predictor
 
 router = APIRouter()
 predictor = Predictor()
 cache = PredictionCache()
+market_data = MarketDataService(CSVMarketDataProvider())
 
 
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "stocksense-ai"}
+
+
+@router.get("/stocks/{symbol}/history", dependencies=[Depends(enforce_rate_limit)])
+def stock_history(
+    symbol: str,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[dict[str, object]]:
+    try:
+        bars = market_data.history(symbol, limit)
+        if not bars:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "code": "SYMBOL_NOT_FOUND",
+                    "message": f"No market data found for symbol '{symbol.upper()}'.",
+                },
+            )
+        return [bar.__dict__ for bar in bars]
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "MARKET_DATA_INPUT_ERROR",
+                "message": str(exc),
+            },
+        ) from exc
 
 
 @router.get("/metrics", dependencies=[Depends(enforce_rate_limit)])
@@ -44,7 +74,10 @@ def metrics() -> dict[str, object]:
     response_model=PredictionResponse,
     dependencies=[Depends(enforce_rate_limit)],
 )
-def predict(request: PredictionRequest) -> PredictionResponse:
+def predict(
+    request: PredictionRequest,
+    current_user=Depends(get_current_user),
+) -> PredictionResponse:
     symbol = request.symbol.upper()
     history = [bar.model_dump() for bar in request.history]
     cache_key = predictor.cache_key(symbol, history)
@@ -72,6 +105,7 @@ def predict(request: PredictionRequest) -> PredictionResponse:
     session = get_session()
     try:
         PredictionRepository(session).add(
+            user_id=current_user.id,
             symbol=symbol,
             predicted_close=float(result["predicted_close"]),
             expected_change_pct=float(result["expected_change_pct"]),
@@ -96,10 +130,12 @@ def predict(request: PredictionRequest) -> PredictionResponse:
 def prediction_history(
     symbol: str | None = Query(default=None, max_length=16),
     limit: int = Query(default=20, ge=1, le=100),
+    current_user=Depends(get_current_user),
 ) -> list[PredictionHistoryItem]:
     session = get_session()
     try:
         records = PredictionRepository(session).list_recent(
+            user_id=current_user.id,
             symbol=symbol.upper() if symbol else None,
             limit=limit,
         )
