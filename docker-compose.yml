@@ -4,14 +4,39 @@ services:
     ports:
       - "8000:8000"
     environment:
+      ENVIRONMENT: development
       DATABASE_URL: postgresql+psycopg://stocksense:stocksense@postgres:5432/stocksense
       REDIS_URL: redis://redis:6379/0
-      API_KEY: ${API_KEY:-change-this-development-key}
+      JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-me}
       RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-60}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      CORS_ORIGINS: http://localhost:5173
+      ALLOWED_HOSTS: "*"
     depends_on:
       - postgres
       - redis
+
+  worker:
+    build: .
+    command: python -m app.workers.worker
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+psycopg://stocksense:stocksense@postgres:5432/stocksense
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-me}
+    depends_on:
+      - postgres
+      - redis
+
+  web:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:80"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+    depends_on:
+      - api
 
   postgres:
     image: postgres:17
