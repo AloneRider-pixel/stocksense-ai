@@ -39,7 +39,7 @@ export default function Dashboard({
         <section className="metric-grid">
           <article><span>Tracked symbol</span><strong>{symbol}</strong><small>Configured market feed</small></article>
           <article><span>Latest close</span><strong>{market ? market.close.toFixed(2) : "—"}</strong><small>{market ? market.date : "Waiting for data"}</small></article>
-          <article><span>Model</span><strong>RF v0.2</strong><small>Next-period regression</small></article>
+          <article><span>Model</span><strong>{prediction?.model || "RF v0.3"}</strong><small>Next-period regression</small></article>
           <article><span>History records</span><strong>{history.length}</strong><small>Per-user predictions</small></article>
           <article><span>Evaluated</span><strong>{history.filter((item) => item.actual_close).length}</strong><small>Predictions with actuals</small></article>
         </section>
