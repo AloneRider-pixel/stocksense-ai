@@ -11,3 +11,10 @@ def test_health() -> None:
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+def test_metrics_without_generated_file() -> None:
+    response = client.get("/api/v1/metrics")
+
+    assert response.status_code == 200
+    assert "status" in response.json()
