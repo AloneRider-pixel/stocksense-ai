@@ -123,7 +123,7 @@ def stock_history(
                     )
                     PredictionRepository(session).evaluate_pending(normalized)
                     stored = repository.list_history(normalized, limit=limit)
-            except TwelveDataError as exc:
+            except (TwelveDataError, ValueError) as exc:
                 if not stored:
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
