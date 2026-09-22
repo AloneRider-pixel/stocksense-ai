@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://stocksense:stocksense@localhost:5432/stocksense"
     redis_url: str = "redis://localhost:6379/0"
     cache_ttl_seconds: int = 300
+    api_key: str = ""
+    rate_limit_requests: int = 60
+    rate_limit_window_seconds: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
