@@ -12,6 +12,15 @@ services:
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
       CORS_ORIGINS: http://localhost:5173
       ALLOWED_HOSTS: "*"
+      MARKET_DATA_PROVIDER: ${MARKET_DATA_PROVIDER:-twelve_data}
+      TWELVE_DATA_API_KEY: ${TWELVE_DATA_API_KEY:-}
+      TWELVE_DATA_BASE_URL: https://api.twelvedata.com
+      MARKET_DATA_MAX_ROWS: ${MARKET_DATA_MAX_ROWS:-5000}
+      MARKET_DATA_TIMEOUT_SECONDS: ${MARKET_DATA_TIMEOUT_SECONDS:-10}
+      MARKET_DATA_REFRESH_INTERVAL_MINUTES: ${MARKET_DATA_REFRESH_INTERVAL_MINUTES:-30}
+      MARKET_DATA_SYMBOLS: ${MARKET_DATA_SYMBOLS:-AAPL,MSFT,GOOGL,AMZN,NVDA}
+      MARKET_DATA_REFRESH_HOUR: ${MARKET_DATA_REFRESH_HOUR:-22}
+      MARKET_DATA_REFRESH_MINUTE: ${MARKET_DATA_REFRESH_MINUTE:-30}
     depends_on:
       - postgres
       - redis
@@ -24,6 +33,14 @@ services:
       DATABASE_URL: postgresql+psycopg://stocksense:stocksense@postgres:5432/stocksense
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-me}
+      MARKET_DATA_PROVIDER: ${MARKET_DATA_PROVIDER:-twelve_data}
+      TWELVE_DATA_API_KEY: ${TWELVE_DATA_API_KEY:-}
+      TWELVE_DATA_BASE_URL: https://api.twelvedata.com
+      MARKET_DATA_MAX_ROWS: ${MARKET_DATA_MAX_ROWS:-5000}
+      MARKET_DATA_TIMEOUT_SECONDS: ${MARKET_DATA_TIMEOUT_SECONDS:-10}
+      MARKET_DATA_SYMBOLS: ${MARKET_DATA_SYMBOLS:-AAPL,MSFT,GOOGL,AMZN,NVDA}
+      MARKET_DATA_REFRESH_HOUR: ${MARKET_DATA_REFRESH_HOUR:-22}
+      MARKET_DATA_REFRESH_MINUTE: ${MARKET_DATA_REFRESH_MINUTE:-30}
     depends_on:
       - postgres
       - redis
@@ -35,8 +52,6 @@ services:
         VITE_API_BASE_URL: http://localhost:8000/api/v1
     ports:
       - "5173:80"
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000/api/v1
     depends_on:
       - api
 
