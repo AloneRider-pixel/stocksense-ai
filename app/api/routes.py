@@ -16,7 +16,6 @@ def health() -> dict[str, str]:
 def predict(request: PredictionRequest) -> PredictionResponse:
     result = predictor.predict(
         symbol=request.symbol.upper(),
-        close=request.close,
-        volume=request.volume,
+        history=[bar.model_dump() for bar in request.history],
     )
     return PredictionResponse(**result)
