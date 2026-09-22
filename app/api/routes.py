@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -97,7 +98,7 @@ def stock_history(
                     repository.upsert_many(
                         [
                             {
-                                "date": bar.date,
+                                "date": date.fromisoformat(bar.date),
                                 "symbol": bar.symbol,
                                 "open": bar.open,
                                 "high": bar.high,
@@ -113,6 +114,7 @@ def stock_history(
                             for bar in bars
                         ]
                     )
+                    PredictionRepository(session).evaluate_pending(normalized)
                     stored = repository.list_history(normalized, limit=limit)
             except TwelveDataError as exc:
                 if not stored:
