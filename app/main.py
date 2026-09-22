@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,12 +19,27 @@ from app.observability import MetricsMiddleware, prometheus_response
 from app.services.cache import PredictionCache
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if settings.environment == "production" and settings.jwt_secret == "change-this-in-production":
+        raise RuntimeError("JWT_SECRET must be replaced in production.")
+
+    if settings.environment != "production":
+        try:
+            init_db()
+        except Exception:
+            pass
+
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
     version="1.0.0",
     description="Market intelligence platform for stock analysis, prediction, and monitoring.",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(RequestContextMiddleware)
@@ -35,18 +52,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_list)
-
-
-@app.on_event("startup")
-def startup() -> None:
-    if settings.environment == "production" and settings.jwt_secret == "change-this-in-production":
-        raise RuntimeError("JWT_SECRET must be replaced in production.")
-
-    if settings.environment != "production":
-        try:
-            init_db()
-        except Exception:
-            pass
 
 
 @app.exception_handler(HTTPException)
