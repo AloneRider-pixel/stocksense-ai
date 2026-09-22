@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -89,8 +89,16 @@ def stock_history(
     try:
         repository = MarketDataRepository(session)
         stored = repository.list_history(normalized, limit=limit)
+        stale = (
+            not stored
+            or stored[-1].ingested_at
+            < __import__("datetime").datetime.now(
+                __import__("datetime").timezone.utc
+            )
+            - timedelta(minutes=__import__("app.core.config", fromlist=["settings"]).settings.market_data_refresh_interval_minutes)
+        )
 
-        if len(stored) < limit:
+        if len(stored) < limit or stale:
             try:
                 provider = get_market_data_provider()
                 bars = provider.history(normalized, limit=limit)
