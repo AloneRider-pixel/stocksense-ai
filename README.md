@@ -2,24 +2,74 @@
 
 Market intelligence platform for stock analysis, next-period prediction, and model-driven monitoring.
 
-StockSense AI is designed as a product system rather than a single prediction script. The codebase separates the web client, authenticated API, market-data boundary, ML pipeline, persistence, asynchronous workers, caching, observability, and operational controls.
+StockSense AI is built as a product system rather than a single prediction script. The codebase separates the web client, authenticated API, market-data ingestion, ML evaluation, persistence, asynchronous workers, caching, observability, and operational controls.
 
 ## Product
 
-The platform provides:
-
 - User accounts with JWT authentication
-- Stock market-data access through a provider abstraction
-- Technical feature engineering and time-series model evaluation
+- Real daily OHLCV ingestion through a configurable market-data provider
+- Technical feature engineering and walk-forward model evaluation
 - Next-period price prediction
-- Per-user prediction history
+- Prediction-versus-actual reconciliation
+- Per-user prediction history and evaluation metrics
 - Redis caching and rate limiting
 - PostgreSQL persistence
-- Model evaluation metrics
-- Background job execution
+- Background job execution and scheduled refresh
 - Prometheus-compatible runtime metrics
 - Responsive React dashboard
 - Dockerized local stack
+
+## Real market data
+
+The primary integration is Twelve Data. Configure TWELVE_DATA_API_KEY and set MARKET_DATA_PROVIDER=twelve_data.
+
+Use the ingestion CLI:
+
+    python -m app.market_data.cli --symbol AAPL --limit 500
+
+Or call the authenticated API:
+
+    POST /api/v1/stocks/AAPL/ingest
+
+The provider data is normalized into the internal MarketBar contract and persisted in PostgreSQL. Stored rows are keyed by symbol and trading date. The API refreshes stale data automatically, and the background worker refreshes the configured symbol universe on a schedule.
+
+For local tests without an external provider, set MARKET_DATA_PROVIDER=csv.
+
+## ML evaluation
+
+Training can use live provider data:
+
+    python -m app.services.training --symbol AAPL --provider twelve_data --limit 1000
+
+The model evaluation uses expanding-window walk-forward validation with scikit-learn TimeSeriesSplit. Each fold trains only on earlier observations and evaluates on later observations; random shuffling is avoided because it can produce unrealistic time-series evaluation.
+
+Generated evaluation artifacts contain:
+
+- MAE
+- RMSE
+- MAPE
+- directional accuracy
+- last-close baseline MAE
+- improvement versus the baseline
+- row-level predicted and actual closes for every evaluation observation
+
+The final model is then fit on the available historical training frame and registered with its feature set, dataset source, metrics, timestamp, and model version.
+
+## Prediction-versus-actual tracking
+
+Every persisted prediction records the prediction date. Once a later market bar becomes available, the reconciliation job finds the first subsequent trading bar and stores:
+
+- actual date
+- actual close
+- absolute error
+- percentage error
+- directional correctness
+- evaluation timestamp
+
+The product exposes:
+
+    GET /api/v1/predictions
+    GET /api/v1/predictions/evaluation
 
 ## Architecture
 
@@ -27,87 +77,44 @@ The platform provides:
        │
        ▼
     React Web App
-       │ HTTPS / JSON
+       │
        ▼
-    FastAPI API
-       ├── Authentication
-       ├── Prediction Service ──────► Redis
-       │                         └──► PostgreSQL
-       ├── Market Data Service
-       └── Model Metrics
-                 │
-                 ▼
-             Redis Queue
-                 │
-                 ▼
-          Background Worker
-
-## Engineering stack
-
-Backend: Python, FastAPI, Pydantic, SQLAlchemy, PostgreSQL, Redis
-
-ML: Pandas, NumPy, scikit-learn, joblib
-
-Frontend: React, Vite, CSS
-
-Platform: Docker, Docker Compose, GitHub Actions, Alembic
-
-Observability: Prometheus-compatible HTTP metrics, health probes, request IDs
-
-## Repository structure
-
-    stocksense-ai/
-    ├── app/
-    │   ├── api/
-    │   ├── auth/
-    │   ├── core/
-    │   ├── db/
-    │   ├── http/
-    │   ├── market_data/
-    │   ├── services/
-    │   ├── workers/
-    │   ├── observability.py
-    │   └── main.py
-    ├── frontend/
-    ├── ml models and evaluation outputs under models/
-    ├── tests/
-    ├── alembic/
-    ├── docs/
-    ├── .github/
-    ├── Dockerfile
-    ├── docker-compose.yml
-    ├── pyproject.toml
-    └── requirements.txt
+    FastAPI
+       ├── Auth / Authorization
+       ├── Market Data Service ──► Twelve Data
+       ├── Prediction Service ───► Redis
+       │                       └─► PostgreSQL
+       └── Evaluation APIs
+                   │
+                   ▼
+              Redis Queue
+                   │
+                   ▼
+             Background Worker
 
 ## Local development
 
-### Backend
+Backend:
 
     python -m venv .venv
     source .venv/bin/activate
     pip install -r requirements.txt
     cp .env.example .env
     alembic upgrade head
-    python -m app.services.training
+    python -m app.services.training --symbol AAPL --provider twelve_data --limit 1000
     uvicorn app.main:app --reload
 
-API documentation is available at http://127.0.0.1:8000/docs.
-
-### Frontend
+Frontend:
 
     cd frontend
     npm install
     npm run dev
 
-Set the API URL through `VITE_API_BASE_URL` when needed.
-
-### Full stack
+Full stack:
 
     docker compose up --build
 
-The Compose stack includes the API, React web application, PostgreSQL, Redis, and worker.
-
-## API surface
+## API
 
 Public:
 
@@ -121,57 +128,40 @@ Authenticated:
 
     GET  /api/v1/auth/me
     GET  /api/v1/stocks/{symbol}/history
+    POST /api/v1/stocks/{symbol}/ingest
     POST /api/v1/predict
     GET  /api/v1/predictions
+    GET  /api/v1/predictions/evaluation
     GET  /api/v1/metrics
 
 Operational:
 
     GET /internal/metrics
 
-## Machine learning
+## Engineering quality
 
-The initial model is a Random Forest regressor trained on engineered OHLCV-derived features. Training uses a chronological split rather than random shuffling to keep the evaluation protocol aligned with time-series data.
-
-Training output is written as a model artifact plus machine-readable metrics. The model binary is ignored by Git so the repository stays source-oriented and reproducible.
-
-Production evaluation should use real market data, walk-forward validation, baseline comparisons, drift monitoring, and explicit cost assumptions before any performance figure is treated as meaningful.
-
-## Data layer
-
-PostgreSQL is the system of record for users and prediction history. SQLAlchemy repositories provide the data-access boundary. Alembic is the production migration mechanism.
-
-Redis is used for prediction caching, rate limiting, and the background-job transport.
-
-The market-data layer exposes a provider interface so the product can move from the bundled local dataset to an external data provider without rewriting API/business logic.
-
-## Security
-
-- Passwords are hashed with scrypt.
-- Access is controlled with signed JWT bearer tokens.
-- Prediction history is scoped to the authenticated user.
-- Request payloads are validated with Pydantic.
-- Rate limiting is Redis-backed.
-- HTTP responses include request IDs and baseline security headers.
-- Secrets are provided through environment variables and excluded from Git.
-
-See `docs/security.md` for the current security model.
-
-## Quality
-
-CI runs backend linting and tests plus a frontend production build.
+CI runs backend linting and tests plus the frontend production build.
 
     ruff check app tests
     pytest -q
     cd frontend && npm run build
 
-Repository contribution conventions live under `.github/` and production-operational notes are in `docs/`.
+Database schema changes are managed through Alembic. Background jobs use ARQ and Redis. Runtime health probes distinguish liveness from dependency readiness.
 
-## Operating principles
+## Security
 
-StockSense AI is built around reliability, explicit boundaries, reproducible evaluation, observable behavior, and maintainable interfaces.
+- Passwords are hashed with scrypt.
+- JWT bearer tokens protect product endpoints.
+- Prediction history is scoped to the authenticated user.
+- Redis-backed rate limiting protects authenticated and public auth endpoints.
+- Request validation and structured errors are enabled.
+- Secrets are loaded from environment variables and ignored by Git.
 
-The system is a market-analysis product and not a brokerage or order-execution system. Predictions are informational and should not be represented as investment advice.
+See docs/security.md and docs/operations.md for operational details.
+
+## Model limitations
+
+Predictions are informational and are not investment advice. The bundled CSV dataset exists for local reproducibility. Production model claims should be based on real historical data, reproducible walk-forward evaluation, baseline comparisons, and clearly documented data provenance.
 
 ## License
 
