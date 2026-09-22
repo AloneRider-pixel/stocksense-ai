@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from hashlib import sha256
 from pathlib import Path
 
@@ -10,23 +11,49 @@ from app.services.features import build_prediction_features
 
 
 MODEL_PATH = Path("models/stocksense_rf.joblib")
+REGISTRY_PATH = Path("models/registry.json")
 
 
 class Predictor:
-    def __init__(self, model_path: Path = MODEL_PATH) -> None:
+    def __init__(
+        self,
+        model_path: Path = MODEL_PATH,
+        registry_path: Path = REGISTRY_PATH,
+    ) -> None:
         self.model_path = model_path
+        self.registry_path = registry_path
         self.model = self._load_model()
+        self.model_version = self._load_model_version()
 
     def _load_model(self):
         if not self.model_path.exists():
             from app.services.training import train_model
+
             train_model(model_path=str(self.model_path))
+
         return joblib.load(self.model_path)
 
-    def predict(self, symbol: str, history: list[dict[str, float]]) -> dict[str, object]:
-        features = np.array([build_prediction_features(history)])
+    def _load_model_version(self) -> str:
+        if not self.registry_path.exists():
+            return "random-forest-unknown"
+
+        try:
+            registry = json.loads(self.registry_path.read_text(encoding="utf-8"))
+            return str(registry.get("version", "random-forest-unknown"))
+        except (OSError, ValueError, TypeError):
+            return "random-forest-unknown"
+
+    def predict(
+        self,
+        symbol: str,
+        history: list[dict[str, object]],
+    ) -> dict[str, object]:
+        features = np.array(
+            [build_prediction_features(history)] 
+        )
         predicted_close = float(self.model.predict(features)[0])
         current_close = float(history[-1]["close"])
+
         return {
             "symbol": symbol,
             "predicted_close": round(predicted_close, 4),
@@ -34,11 +61,14 @@ class Predictor:
                 ((predicted_close - current_close) / current_close) * 100,
                 4,
             ),
-            "model": "random-forest-v0.2",
+            "model": self.model_version,
             "cached": False,
         }
 
     @staticmethod
-    def cache_key(symbol: str, history: list[dict[str, float]]) -> str:
+    def cache_key(
+        symbol: str,
+        history: list[dict[str, object]],
+    ) -> str:
         raw = f"{symbol}:{history[-10:]}".encode()
         return "prediction:" + sha256(raw).hexdigest()
