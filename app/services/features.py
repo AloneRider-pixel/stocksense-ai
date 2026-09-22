@@ -20,8 +20,19 @@ def build_training_frame(df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError(f"Missing required columns: {sorted(missing)}")
 
     frame = df.copy()
+
+    if "date" in frame.columns:
+        frame["date"] = pd.to_datetime(frame["date"], errors="raise")
+        frame = frame.sort_values("date").drop_duplicates(
+            subset=["date"],
+            keep="last",
+        )
+
     frame["close"] = pd.to_numeric(frame["close"], errors="coerce")
     frame["volume"] = pd.to_numeric(frame["volume"], errors="coerce")
+
+    if (frame["close"] <= 0).any() or (frame["volume"] < 0).any():
+        raise ValueError("close must be positive and volume must be non-negative")
 
     frame["return_1d"] = frame["close"].pct_change()
     frame["return_5d"] = frame["close"].pct_change(5)
@@ -31,17 +42,27 @@ def build_training_frame(df: pd.DataFrame) -> pd.DataFrame:
     frame["volume_change5"] = frame["volume"].pct_change(5)
     frame["target"] = frame["close"].shift(-1)
 
-    frame = frame.dropna(subset=FEATURE_COLUMNS + ["target"]).reset_index(drop=True)
-    return frame
+    return frame.dropna(
+        subset=FEATURE_COLUMNS + ["target"]
+    ).reset_index(drop=True)
 
 
-def build_prediction_features(history: list[dict[str, float]]) -> list[float]:
-    if len(history) < 10:
-        raise ValueError("At least 10 historical bars are required")
+def build_prediction_features(
+    history: list[dict[str, object]],
+) -> list[float]:
+    if len(history) < 11:
+        raise ValueError("At least 11 historical bars are required")
 
     frame = pd.DataFrame(history)
     frame["close"] = pd.to_numeric(frame["close"], errors="raise")
     frame["volume"] = pd.to_numeric(frame["volume"], errors="raise")
+
+    if "date" in frame.columns:
+        frame["date"] = pd.to_datetime(frame["date"], errors="raise")
+        frame = frame.sort_values("date").drop_duplicates(
+            subset=["date"],
+            keep="last",
+        )
 
     if (frame["close"] <= 0).any() or (frame["volume"] <= 0).any():
         raise ValueError("close and volume must be positive")
