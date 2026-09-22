@@ -1,41 +1,44 @@
 from __future__ import annotations
 
 from hashlib import sha256
+from pathlib import Path
 
+import joblib
 import numpy as np
-from sklearn.linear_model import Ridge
 
-from app.services.features import build_features
+from app.services.features import build_prediction_features
+
+
+MODEL_PATH = Path("models/stocksense_rf.joblib")
 
 
 class Predictor:
-    """Small transparent baseline used for the initial API implementation."""
+    def __init__(self, model_path: Path = MODEL_PATH) -> None:
+        self.model_path = model_path
+        self.model = self._load_model()
 
-    def __init__(self) -> None:
-        self.model = Ridge(alpha=1.0)
-        self._fit_baseline()
+    def _load_model(self):
+        if not self.model_path.exists():
+            from app.services.training import train_model
+            train_model(model_path=str(self.model_path))
+        return joblib.load(self.model_path)
 
-    def _fit_baseline(self) -> None:
-        closes = np.linspace(80.0, 120.0, 64)
-        volumes = np.linspace(900_000, 1_600_000, 64)
-
-        x = np.array([build_features(float(c), float(v)) for c, v in zip(closes, volumes)])
-        y = closes * 1.002
-
-        self.model.fit(x, y)
-
-    def predict(self, symbol: str, close: float, volume: float) -> dict[str, object]:
-        features = np.array([build_features(close, volume)])
-        predicted = float(self.model.predict(features)[0])
-
+    def predict(self, symbol: str, history: list[dict[str, float]]) -> dict[str, object]:
+        features = np.array([build_prediction_features(history)])
+        predicted_close = float(self.model.predict(features)[0])
+        current_close = float(history[-1]["close"])
         return {
             "symbol": symbol,
-            "predicted_close": round(predicted, 4),
-            "model": "ridge-baseline-v0.1",
+            "predicted_close": round(predicted_close, 4),
+            "expected_change_pct": round(
+                ((predicted_close - current_close) / current_close) * 100,
+                4,
+            ),
+            "model": "random-forest-v0.2",
             "cached": False,
         }
 
     @staticmethod
-    def cache_key(symbol: str, close: float, volume: float) -> str:
-        raw = f"{symbol}:{close:.8f}:{volume:.4f}".encode()
+    def cache_key(symbol: str, history: list[dict[str, float]]) -> str:
+        raw = f"{symbol}:{history[-10:]}".encode()
         return "prediction:" + sha256(raw).hexdigest()
