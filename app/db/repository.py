@@ -13,9 +13,7 @@ class UserRepository:
         self.session = session
 
     def get_by_email(self, email: str) -> User | None:
-        return self.session.scalar(
-            select(User).where(User.email == email)
-        )
+        return self.session.scalar(select(User).where(User.email == email))
 
     def get_by_id(self, user_id: int) -> User | None:
         return self.session.get(User, user_id)
@@ -41,7 +39,6 @@ class MarketDataRepository:
 
         symbol = symbols.pop()
         dates = [bar["date"] for bar in bars]
-
         existing = {
             row.date: row
             for row in self.session.scalars(
@@ -145,9 +142,7 @@ class PredictionRepository:
         return list(self.session.scalars(stmt).all())
 
     def evaluate_pending(self, symbol: str | None = None) -> int:
-        stmt = select(PredictionRecord).where(
-            PredictionRecord.actual_date.is_(None)
-        )
+        stmt = select(PredictionRecord).where(PredictionRecord.actual_date.is_(None))
 
         if symbol:
             stmt = stmt.where(PredictionRecord.symbol == symbol.upper())
