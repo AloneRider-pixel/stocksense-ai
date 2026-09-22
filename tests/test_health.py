@@ -1,6 +1,5 @@
 from fastapi.testclient import TestClient
 
-from app.core.config import settings
 from app.main import app
 
 
@@ -14,13 +13,8 @@ def test_health() -> None:
     assert response.json()["status"] == "ok"
 
 
-def test_metrics_without_generated_file() -> None:
-    settings.api_key = "test-key"
+def test_metrics_requires_authentication() -> None:
+    response = client.get("/api/v1/metrics")
 
-    response = client.get(
-        "/api/v1/metrics",
-        headers={"X-API-Key": "test-key"},
-    )
-
-    assert response.status_code == 200
-    assert "status" in response.json()
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHORIZED"
