@@ -20,7 +20,6 @@ class TwelveDataProvider:
         self.api_key = api_key or settings.twelve_data_api_key
         if not self.api_key:
             raise TwelveDataError("TWELVE_DATA_API_KEY is not configured")
-
         self.base_url = settings.twelve_data_base_url.rstrip("/")
 
     def history(self, symbol: str, limit: int = 100) -> list[MarketBar]:
@@ -35,10 +34,7 @@ class TwelveDataProvider:
         for attempt in range(3):
             try:
                 with httpx.Client(timeout=settings.market_data_timeout_seconds) as client:
-                    response = client.get(
-                        f"{self.base_url}/time_series",
-                        params=params,
-                    )
+                    response = client.get(f"{self.base_url}/time_series", params=params)
                     response.raise_for_status()
                     payload = response.json()
 
@@ -64,7 +60,6 @@ class TwelveDataProvider:
     @staticmethod
     def _to_bar(symbol: str, item: dict[str, str]) -> MarketBar:
         trading_date = date.fromisoformat(item["datetime"][:10])
-
         return MarketBar(
             date=trading_date.isoformat(),
             symbol=symbol.upper(),
