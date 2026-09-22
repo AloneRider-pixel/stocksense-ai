@@ -23,10 +23,13 @@ class Predictor:
     ) -> None:
         self.model_path = model_path
         self.registry_path = registry_path
-        self.model = self._load_model()
-        self.model_version = self._load_model_version()
+        self.model = None
+        self.model_version = None
 
-    def _load_model(self):
+    def _ensure_loaded(self) -> None:
+        if self.model is not None:
+            return
+
         if not self.model_path.exists():
             if settings.environment != "development":
                 raise RuntimeError(
@@ -37,7 +40,8 @@ class Predictor:
 
             train_model(model_path=str(self.model_path))
 
-        return joblib.load(self.model_path)
+        self.model = joblib.load(self.model_path)
+        self.model_version = self._load_model_version()
 
     def _load_model_version(self) -> str:
         if not self.registry_path.exists():
@@ -54,6 +58,8 @@ class Predictor:
         symbol: str,
         history: list[dict[str, object]],
     ) -> dict[str, object]:
+        self._ensure_loaded()
+
         features = np.array([build_prediction_features(history)])
         predicted_close = float(self.model.predict(features)[0])
         current_close = float(history[-1]["close"])
@@ -65,7 +71,7 @@ class Predictor:
                 ((predicted_close - current_close) / current_close) * 100,
                 4,
             ),
-            "model": self.model_version,
+            "model": self.model_version or "random-forest-unknown",
             "cached": False,
         }
 
