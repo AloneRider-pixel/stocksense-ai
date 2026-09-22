@@ -2,16 +2,6 @@
 
 ## 1.0.0
 
-### Added
-
-- Authenticated user accounts and JWT access tokens
-- Per-user prediction history
-- PostgreSQL persistence with SQLAlchemy
-- Alembic migration baseline
-- Redis-backed caching and rate limiting
-- Market-data provider abstraction
-- Background worker entry point
-- Prometheus-compatible HTTP metrics
-- React product dashboard
-- Docker Compose application stack
-- Security and GitHub contribution workflows
+- Product foundation: authenticated React/FastAPI application with PostgreSQL persistence, Redis caching/rate limiting, health probes, and CI.
+- Market intelligence: live-provider ingestion boundary, market-bar persistence, scheduled refresh jobs, and automatic prediction reconciliation.
+- ML lifecycle: expanding-window walk-forward evaluation, model registry metadata, prediction-vs-actual metrics, and reproducible evaluation workflow.
