@@ -41,6 +41,7 @@ export default function Dashboard({
           <article><span>Latest close</span><strong>{market ? market.close.toFixed(2) : "—"}</strong><small>{market ? market.date : "Waiting for data"}</small></article>
           <article><span>Model</span><strong>RF v0.2</strong><small>Next-period regression</small></article>
           <article><span>History records</span><strong>{history.length}</strong><small>Per-user predictions</small></article>
+          <article><span>Evaluated</span><strong>{history.filter((item) => item.actual_close).length}</strong><small>Predictions with actuals</small></article>
         </section>
 
         <section className="workspace">
@@ -81,10 +82,14 @@ export default function Dashboard({
               {history.length === 0 && <div className="empty">No predictions recorded yet.</div>}
               {history.map((item) => (
                 <div className="row" key={item.id}>
-                  <span>{item.symbol}</span>
+                  <span>{item.symbol} · {item.prediction_date}</span>
                   <span>{item.predicted_close.toFixed(2)}</span>
-                  <span>{item.expected_change_pct.toFixed(2)}%</span>
-                  <span>{new Date(item.created_at).toLocaleString()}</span>
+                  <span>{item.actual_close ? item.actual_close.toFixed(2) : "Pending"}</span>
+                  <span>
+                    {item.actual_close
+                      ? "Error " + item.percentage_error.toFixed(2) + "%"
+                      : "Awaiting actual"}
+                  </span>
                 </div>
               ))}
             </div>
