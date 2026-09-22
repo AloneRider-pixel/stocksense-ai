@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, Response, status
 
-from app.api.security import require_api_key
+from app.auth.dependencies import get_current_user
 from app.core.config import settings
 from app.services.rate_limit import RateLimiter
 
@@ -10,9 +10,11 @@ rate_limiter = RateLimiter()
 
 def enforce_rate_limit(
     response: Response,
-    api_key: str = Depends(require_api_key),
-) -> str:
-    allowed, remaining = rate_limiter.check(api_key)
+    current_user=Depends(get_current_user),
+):
+    identity = f"user:{current_user.id}"
+    allowed, remaining = rate_limiter.check(identity)
+
     response.headers["X-RateLimit-Limit"] = str(settings.rate_limit_requests)
     response.headers["X-RateLimit-Remaining"] = str(remaining)
 
@@ -28,4 +30,4 @@ def enforce_rate_limit(
             headers={"Retry-After": str(retry_after)},
         )
 
-    return api_key
+    return current_user
