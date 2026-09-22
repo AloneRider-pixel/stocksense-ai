@@ -1,7 +1,10 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.routes import router
+from app.auth.routes import router as auth_router
 from app.core.config import settings
 from app.core.errors import (
     http_exception_handler,
@@ -9,13 +12,29 @@ from app.core.errors import (
     validation_exception_handler,
 )
 from app.db.database import init_db
+from app.http.middleware import RequestContextMiddleware
+from app.observability import MetricsMiddleware, prometheus_response
 
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.4.0",
-    description="StockSense AI prediction and analysis API.",
+    version="1.0.0",
+    description="Market intelligence platform for stock analysis, prediction, and monitoring.",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
+
+
+app.add_middleware(RequestContextMiddleware)
+app.add_middleware(MetricsMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_list)
 
 
 @app.on_event("startup")
@@ -32,19 +51,19 @@ async def http_error_handler(request: Request, exc: HTTPException):
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_handler(
-    request: Request,
-    exc: RequestValidationError,
-):
+async def validation_handler(request: Request, exc: RequestValidationError):
     return await validation_exception_handler(request, exc)
 
 
 @app.exception_handler(Exception)
-async def exception_handler(
-    request: Request,
-    exc: Exception,
-):
+async def exception_handler(request: Request, exc: Exception):
     return await unhandled_exception_handler(request, exc)
 
 
+@app.get("/internal/metrics", include_in_schema=False)
+def internal_metrics():
+    return prometheus_response()
+
+
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(router, prefix="/api/v1")
