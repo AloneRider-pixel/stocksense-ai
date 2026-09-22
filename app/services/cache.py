@@ -30,7 +30,7 @@ class PredictionCache:
             self.client.setex(
                 key,
                 settings.cache_ttl_seconds,
-                json.dumps(value),
+                json.dumps(value, default=str),
             )
             return True
         except RedisError:
