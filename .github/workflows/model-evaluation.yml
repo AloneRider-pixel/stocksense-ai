@@ -1,0 +1,51 @@
+name: Model Evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: Ticker to evaluate
+        required: true
+        default: AAPL
+      rows:
+        description: Historical rows to retrieve
+        required: true
+        default: "1000"
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    environment: research
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Walk-forward evaluation
+        env:
+          MARKET_DATA_PROVIDER: twelve_data
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+        run: |
+          python -m app.services.training \
+            --symbol "${{ inputs.symbol }}" \
+            --provider twelve_data \
+            --limit "${{ inputs.rows }}"
+
+      - name: Publish metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: stocksense-model-evaluation-${{ inputs.symbol }}-${{ github.sha }}
+          path: |
+            models/metrics.json
+            models/registry.json
+            models/walk_forward_predictions.csv
