@@ -82,6 +82,7 @@ export default function App() {
         body: JSON.stringify({
           symbol,
           history: bars.map((bar) => ({
+            date: bar.date,
             close: bar.close,
             volume: bar.volume,
           })),
