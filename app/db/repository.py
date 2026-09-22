@@ -196,3 +196,55 @@ class PredictionRepository:
             self.session.commit()
 
         return evaluated
+
+
+    def evaluation_summary(
+        self,
+        *,
+        user_id: int,
+        symbol: str | None = None,
+    ) -> dict[str, float | int | None]:
+        stmt = select(PredictionRecord).where(
+            PredictionRecord.user_id == user_id,
+            PredictionRecord.actual_close.is_not(None),
+        )
+
+        if symbol:
+            stmt = stmt.where(PredictionRecord.symbol == symbol.upper())
+
+        records = list(self.session.scalars(stmt).all())
+        if not records:
+            return {
+                "evaluated_predictions": 0,
+                "mae": None,
+                "mape_pct": None,
+                "directional_accuracy_pct": None,
+            }
+
+        errors = [
+            record.absolute_error
+            for record in records
+            if record.absolute_error is not None
+        ]
+        percentage_errors = [
+            record.percentage_error
+            for record in records
+            if record.percentage_error is not None
+        ]
+        directions = [
+            record.direction_correct
+            for record in records
+            if record.direction_correct is not None
+        ]
+
+        return {
+            "evaluated_predictions": len(records),
+            "mae": round(sum(errors) / len(errors), 6) if errors else None,
+            "mape_pct": round(
+                sum(percentage_errors) / len(percentage_errors), 6
+            ) if percentage_errors else None,
+            "directional_accuracy_pct": round(
+                sum(bool(value) for value in directions) / len(directions) * 100,
+                6,
+            ) if directions else None,
+        }
