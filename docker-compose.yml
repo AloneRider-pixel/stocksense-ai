@@ -6,6 +6,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://stocksense:stocksense@postgres:5432/stocksense
       REDIS_URL: redis://redis:6379/0
+      API_KEY: ${API_KEY:-change-this-development-key}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-60}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
     depends_on:
       - postgres
       - redis
