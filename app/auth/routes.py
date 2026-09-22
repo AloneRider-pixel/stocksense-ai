@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.public_rate_limit import enforce_public_rate_limit
 from app.auth.dependencies import get_current_user
 from app.auth.schemas import (
     LoginRequest,
@@ -15,7 +16,12 @@ from app.db.database import get_session
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_public_rate_limit)],
+)
 def register(request: RegisterRequest) -> UserResponse:
     session = get_session()
     try:
@@ -47,7 +53,11 @@ def register(request: RegisterRequest) -> UserResponse:
         session.close()
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    dependencies=[Depends(enforce_public_rate_limit)],
+)
 def login(request: LoginRequest) -> TokenResponse:
     session = get_session()
     try:
