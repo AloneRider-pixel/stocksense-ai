@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -92,9 +92,7 @@ def stock_history(
         stale = (
             not stored
             or stored[-1].ingested_at
-            < __import__("datetime").datetime.now(
-                __import__("datetime").timezone.utc
-            )
+            < datetime.now(timezone.utc)
             - timedelta(minutes=__import__("app.core.config", fromlist=["settings"]).settings.market_data_refresh_interval_minutes)
         )
 
