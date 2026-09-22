@@ -1,20 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, clearToken, setToken } from "./lib/api";
 
-const demoHistory = [
-  { close: 108.4, volume: 1370000 },
-  { close: 109.1, volume: 1380000 },
-  { close: 109.7, volume: 1400000 },
-  { close: 110.0, volume: 1410000 },
-  { close: 110.6, volume: 1420000 },
-  { close: 111.0, volume: 1430000 },
-  { close: 111.4, volume: 1440000 },
-  { close: 112.1, volume: 1450000 },
-  { close: 112.7, volume: 1460000 },
-  { close: 113.3, volume: 1470000 },
-  { close: 114.0, volume: 1480000 },
-];
-
 export default function App() {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
@@ -22,6 +8,7 @@ export default function App() {
   const [fullName, setFullName] = useState("");
   const [symbol, setSymbol] = useState("DEMO");
   const [user, setUser] = useState(null);
+  const [market, setMarket] = useState(null);
   const [prediction, setPrediction] = useState(null);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState("");
@@ -29,8 +16,23 @@ export default function App() {
 
   useEffect(() => {
     if (!localStorage.getItem("stocksense_token")) return;
-    api("/auth/me").then(setUser).catch(() => clearToken());
+
+    api("/auth/me")
+      .then(setUser)
+      .catch(() => clearToken());
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    api("/predictions?limit=10")
+      .then(setHistory)
+      .catch(() => setHistory([]));
+
+    api("/stocks/" + symbol + "/history?limit=1")
+      .then((result) => setMarket(result[0] || null))
+      .catch(() => setMarket(null));
+  }, [user, symbol]);
 
   async function submitAuth(event) {
     event.preventDefault();
@@ -41,7 +43,11 @@ export default function App() {
       if (mode === "register") {
         await api("/auth/register", {
           method: "POST",
-          body: JSON.stringify({ email, password, full_name: fullName || null }),
+          body: JSON.stringify({
+            email,
+            password,
+            full_name: fullName || null,
+          }),
         });
       }
 
@@ -64,9 +70,23 @@ export default function App() {
     setError("");
 
     try {
+      const bars = await api("/stocks/" + symbol + "/history?limit=100");
+
+      if (bars.length < 11) {
+        throw new Error("Not enough market history is available for this symbol.");
+      }
+
+      setMarket(bars[bars.length - 1]);
+
       const result = await api("/predict", {
         method: "POST",
-        body: JSON.stringify({ symbol, history: demoHistory }),
+        body: JSON.stringify({
+          symbol,
+          history: bars.map((bar) => ({
+            close: bar.close,
+            volume: bar.volume,
+          })),
+        }),
       });
 
       setPrediction(result);
@@ -147,8 +167,8 @@ export default function App() {
 
         <section className="metric-grid">
           <article><span>Tracked symbol</span><strong>{symbol}</strong><small>Configured market feed</small></article>
+          <article><span>Latest close</span><strong>{market ? market.close.toFixed(2) : "—"}</strong><small>{market ? market.date : "Waiting for data"}</small></article>
           <article><span>Model</span><strong>RF v0.2</strong><small>Next-period regression</small></article>
-          <article><span>Prediction state</span><strong>{prediction ? "Ready" : "Waiting"}</strong><small>{prediction ? "Latest inference complete" : "Run an inference"}</small></article>
           <article><span>History records</span><strong>{history.length}</strong><small>Per-user predictions</small></article>
         </section>
 
