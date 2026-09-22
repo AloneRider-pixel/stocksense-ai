@@ -7,6 +7,7 @@ export default function Dashboard({
   market,
   prediction,
   history,
+  evaluation,
   busy,
   error,
   onPredict,
@@ -41,7 +42,9 @@ export default function Dashboard({
           <article><span>Latest close</span><strong>{market ? market.close.toFixed(2) : "—"}</strong><small>{market ? market.date : "Waiting for data"}</small></article>
           <article><span>Model</span><strong>{prediction?.model || "RF v0.3"}</strong><small>Next-period regression</small></article>
           <article><span>History records</span><strong>{history.length}</strong><small>Per-user predictions</small></article>
-          <article><span>Evaluated</span><strong>{history.filter((item) => item.actual_close).length}</strong><small>Predictions with actuals</small></article>
+          <article><span>Evaluated</span><strong>{evaluation?.evaluated_predictions ?? 0}</strong><small>Predictions with actuals</small></article>
+          <article><span>Directional accuracy</span><strong>{evaluation?.directional_accuracy_pct != null ? evaluation.directional_accuracy_pct.toFixed(1) + "%" : "—"}</strong><small>Online evaluation</small></article>
+          <article><span>Online MAE</span><strong>{evaluation?.mae != null ? evaluation.mae.toFixed(3) : "—"}</strong><small>Realized prediction error</small></article>
         </section>
 
         <section className="workspace">
