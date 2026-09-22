@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 30
 
-    api_key: str = ""
     rate_limit_requests: int = 60
     rate_limit_window_seconds: int = 60
 
