@@ -14,5 +14,6 @@ class PredictionRequest(BaseModel):
 class PredictionResponse(BaseModel):
     symbol: str
     predicted_close: float
+    expected_change_pct: float
     model: str
     cached: bool = False
