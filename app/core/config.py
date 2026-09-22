@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     twelve_data_base_url: str = "https://api.twelvedata.com"
     market_data_max_rows: int = 5000
     market_data_timeout_seconds: float = 10.0
+    market_data_refresh_interval_minutes: int = 30
     market_data_symbols: str = "AAPL,MSFT,GOOGL,AMZN,NVDA"
     market_data_refresh_hour: int = 22
     market_data_refresh_minute: int = 30
