@@ -138,6 +138,16 @@ Operational:
 
     GET /internal/metrics
 
+## Deployment & Metrics
+
+StockSense AI is containerized for separate web, API, database, cache, and worker services. The repository includes `docs/deployment.md` with the deployment runbook and measurement protocol.
+
+**Live URL:** Pending AWS deployment.
+
+Do not publish the historical 99.2% uptime claim until it is backed by an external probe window with recorded successes, failures, timestamps, and version identifiers.
+
+For the ML 35% accuracy-improvement claim, use the generated walk-forward artifacts from a documented real-data run. The repository's on-demand GitHub Actions workflow is available at `.github/workflows/model-evaluation.yml` and expects a `TWELVE_DATA_API_KEY` repository/environment secret.
+
 ## Engineering quality
 
 CI runs backend linting and tests plus the frontend production build.
