@@ -42,11 +42,11 @@ def startup() -> None:
     if settings.environment == "production" and settings.jwt_secret == "change-this-in-production":
         raise RuntimeError("JWT_SECRET must be replaced in production.")
 
-    try:
-        init_db()
-    except Exception:
-        if settings.environment == "production":
-            raise
+    if settings.environment != "production":
+        try:
+            init_db()
+        except Exception:
+            pass
 
 
 @app.exception_handler(HTTPException)
