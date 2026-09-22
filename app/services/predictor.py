@@ -7,6 +7,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 
+from app.core.config import settings
 from app.services.features import build_prediction_features
 
 
@@ -27,6 +28,11 @@ class Predictor:
 
     def _load_model(self):
         if not self.model_path.exists():
+            if settings.environment != "development":
+                raise RuntimeError(
+                    "Model artifact is missing. Run the training pipeline before starting production."
+                )
+
             from app.services.training import train_model
 
             train_model(model_path=str(self.model_path))
@@ -48,9 +54,7 @@ class Predictor:
         symbol: str,
         history: list[dict[str, object]],
     ) -> dict[str, object]:
-        features = np.array(
-            [build_prediction_features(history)] 
-        )
+        features = np.array([build_prediction_features(history)])
         predicted_close = float(self.model.predict(features)[0])
         current_close = float(history[-1]["close"])
 
