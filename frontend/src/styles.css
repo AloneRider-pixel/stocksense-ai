@@ -1,0 +1,98 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #e7edf7;
+  background: #08111f;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; background: #08111f; }
+button, input { font: inherit; }
+
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at top, #17253a 0%, #08111f 48%);
+}
+
+.auth-card {
+  width: min(520px, 100%);
+  padding: 42px;
+  border: 1px solid #263449;
+  border-radius: 22px;
+  background: rgba(11, 20, 35, 0.94);
+  box-shadow: 0 24px 80px rgba(0,0,0,.35);
+}
+
+.brand { font-weight: 800; font-size: 22px; letter-spacing: -.03em; }
+.brand span { color: #69a7ff; }
+.eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .16em; color: #7590b0; margin: 0 0 10px; }
+.auth-card h1 { font-size: clamp(30px, 5vw, 48px); line-height: 1.02; margin: 0 0 28px; letter-spacing: -.045em; }
+label { display: block; margin: 18px 0 8px; color: #a9bad0; font-size: 13px; }
+input { width: 100%; border: 1px solid #2a3a50; background: #0c1727; color: #edf4ff; border-radius: 11px; padding: 13px 14px; outline: none; }
+input:focus { border-color: #69a7ff; }
+
+button {
+  width: 100%;
+  border: 0;
+  border-radius: 11px;
+  padding: 13px 16px;
+  margin-top: 22px;
+  background: #69a7ff;
+  color: #08111f;
+  font-weight: 800;
+  cursor: pointer;
+}
+button:disabled { opacity: .55; cursor: default; }
+.error { margin-top: 14px; padding: 12px 14px; background: #321b21; border: 1px solid #69333e; border-radius: 10px; color: #ffbdc9; }
+.hint, .muted { color: #7f93ad; font-size: 13px; line-height: 1.6; }
+
+.app-shell { min-height: 100vh; display: flex; }
+aside { width: 248px; padding: 28px 20px; border-right: 1px solid #1f2d41; background: #091321; display: flex; flex-direction: column; gap: 36px; }
+nav { display: grid; gap: 8px; }
+nav a { padding: 12px 14px; color: #7f93ad; border-radius: 10px; font-size: 14px; }
+nav a.active, nav a:hover { color: #edf4ff; background: #122037; }
+.ghost { margin-top: auto; width: auto; background: transparent; color: #8ea3bd; border: 1px solid #263449; }
+
+.dashboard { flex: 1; padding: 36px; max-width: 1500px; }
+header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 28px; }
+header h1 { font-size: 42px; margin: 0 0 10px; letter-spacing: -.045em; }
+.user-chip { border: 1px solid #2a3a50; padding: 10px 14px; border-radius: 999px; color: #9aafc8; font-size: 12px; }
+
+.metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+.metric-grid article, .panel { border: 1px solid #223148; background: #0b1727; border-radius: 16px; }
+.metric-grid article { padding: 18px; }
+.metric-grid span, .prediction-box span { display: block; color: #7f93ad; font-size: 12px; margin-bottom: 8px; }
+.metric-grid strong { display: block; font-size: 24px; }
+.metric-grid small { display: block; color: #596f8a; margin-top: 7px; }
+
+.workspace { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.panel { padding: 22px; }
+.panel h2 { margin: 0; font-size: 20px; }
+.panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.symbol-input { width: 130px; text-transform: uppercase; }
+.prediction-box { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 26px 0; }
+.prediction-box > div { padding: 22px; border-radius: 14px; background: #0e1c30; }
+.prediction-box strong { font-size: 34px; }
+.positive { color: #7ee2a8; }
+.negative { color: #ff9fae; }
+.table { margin-top: 16px; display: grid; gap: 6px; }
+.row { display: grid; grid-template-columns: .7fr 1fr 1fr 1.5fr; gap: 10px; padding: 12px; background: #0e1c30; border-radius: 10px; font-size: 12px; color: #a4b5c8; }
+.empty { padding: 30px 8px; text-align: center; color: #637891; }
+
+@media (max-width: 1050px) {
+  .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .workspace { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .app-shell { display: block; }
+  aside { width: 100%; border-right: 0; border-bottom: 1px solid #1f2d41; }
+  nav { grid-template-columns: repeat(2, 1fr); }
+  .dashboard { padding: 22px; }
+  header { flex-direction: column; }
+  .metric-grid { grid-template-columns: 1fr; }
+  .row { grid-template-columns: 1fr 1fr; }
+}
