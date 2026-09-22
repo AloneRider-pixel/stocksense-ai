@@ -16,8 +16,10 @@ const demoHistory = [
 ];
 
 export default function App() {
+  const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [symbol, setSymbol] = useState("DEMO");
   const [user, setUser] = useState(null);
   const [prediction, setPrediction] = useState(null);
@@ -30,15 +32,24 @@ export default function App() {
     api("/auth/me").then(setUser).catch(() => clearToken());
   }, []);
 
-  async function login(event) {
+  async function submitAuth(event) {
     event.preventDefault();
     setBusy(true);
     setError("");
+
     try {
+      if (mode === "register") {
+        await api("/auth/register", {
+          method: "POST",
+          body: JSON.stringify({ email, password, full_name: fullName || null }),
+        });
+      }
+
       const result = await api("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
+
       setToken(result.access_token);
       setUser(await api("/auth/me"));
     } catch (err) {
@@ -51,11 +62,13 @@ export default function App() {
   async function runPrediction() {
     setBusy(true);
     setError("");
+
     try {
       const result = await api("/predict", {
         method: "POST",
         body: JSON.stringify({ symbol, history: demoHistory }),
       });
+
       setPrediction(result);
       setHistory(await api("/predictions?limit=10"));
     } catch (err) {
@@ -71,16 +84,38 @@ export default function App() {
         <section className="auth-card">
           <div className="brand">StockSense <span>AI</span></div>
           <p className="eyebrow">MARKET INTELLIGENCE PLATFORM</p>
-          <h1>Turn market data into an engineering-grade workflow.</h1>
-          <form onSubmit={login}>
+          <h1>{mode === "login" ? "Market intelligence, built for decisions." : "Create your StockSense account."}</h1>
+
+          <form onSubmit={submitAuth}>
+            {mode === "register" && (
+              <>
+                <label>Full name</label>
+                <input value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={120} />
+              </>
+            )}
+
             <label>Email</label>
             <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
+
             <label>Password</label>
-            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
-            <button disabled={busy}>{busy ? "Signing in..." : "Sign in"}</button>
+            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" minLength={8} required />
+
+            <button disabled={busy}>
+              {busy ? "Working..." : mode === "login" ? "Sign in" : "Create account"}
+            </button>
           </form>
+
           {error && <div className="error">{error}</div>}
-          <p className="hint">Create an account through the backend register endpoint first.</p>
+
+          <button
+            className="switch-auth"
+            onClick={() => {
+              setMode(mode === "login" ? "register" : "login");
+              setError("");
+            }}
+          >
+            {mode === "login" ? "Create an account" : "Back to sign in"}
+          </button>
         </section>
       </main>
     );
@@ -111,8 +146,8 @@ export default function App() {
         </header>
 
         <section className="metric-grid">
-          <article><span>Tracked symbol</span><strong>{symbol}</strong><small>Demo market feed</small></article>
-          <article><span>Model</span><strong>RF v0.2</strong><small>Time-series baseline</small></article>
+          <article><span>Tracked symbol</span><strong>{symbol}</strong><small>Configured market feed</small></article>
+          <article><span>Model</span><strong>RF v0.2</strong><small>Next-period regression</small></article>
           <article><span>Prediction state</span><strong>{prediction ? "Ready" : "Waiting"}</strong><small>{prediction ? "Latest inference complete" : "Run an inference"}</small></article>
           <article><span>History records</span><strong>{history.length}</strong><small>Per-user predictions</small></article>
         </section>
