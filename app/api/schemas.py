@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MarketBar(BaseModel):
@@ -17,3 +19,16 @@ class PredictionResponse(BaseModel):
     expected_change_pct: float
     model: str
     cached: bool = False
+    persisted: bool = False
+
+
+class PredictionHistoryItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    symbol: str
+    predicted_close: float
+    expected_change_pct: float
+    model: str
+    cached: bool
+    created_at: datetime
