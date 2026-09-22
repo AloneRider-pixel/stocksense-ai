@@ -1,5 +1,9 @@
 # StockSense AI
 
+[![CI](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/codeql.yml/badge.svg)](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Market intelligence platform for stock analysis, next-period prediction, and model-driven monitoring.
 
 StockSense AI is built as a product system rather than a single prediction script. The codebase separates the web client, authenticated API, market-data ingestion, ML evaluation, persistence, asynchronous workers, caching, observability, and operational controls.
@@ -21,7 +25,7 @@ StockSense AI is built as a product system rather than a single prediction scrip
 
 ## Real market data
 
-The primary integration is Twelve Data. Configure TWELVE_DATA_API_KEY and set MARKET_DATA_PROVIDER=twelve_data.
+The primary integration is Twelve Data. Configure `TWELVE_DATA_API_KEY` and set `MARKET_DATA_PROVIDER=twelve_data`.
 
 Use the ingestion CLI:
 
@@ -31,9 +35,7 @@ Or call the authenticated API:
 
     POST /api/v1/stocks/AAPL/ingest
 
-The provider data is normalized into the internal MarketBar contract and persisted in PostgreSQL. Stored rows are keyed by symbol and trading date. The API refreshes stale data automatically, and the background worker refreshes the configured symbol universe on a schedule.
-
-For local tests without an external provider, set MARKET_DATA_PROVIDER=csv.
+The provider data is normalized into the internal `MarketBar` contract and persisted in PostgreSQL. Stored rows are keyed by symbol and trading date. The API refreshes stale data automatically, and the background worker refreshes the configured symbol universe on a schedule.
 
 ## ML evaluation
 
@@ -41,7 +43,7 @@ Training can use live provider data:
 
     python -m app.services.training --symbol AAPL --provider twelve_data --limit 1000
 
-The model evaluation uses expanding-window walk-forward validation with scikit-learn TimeSeriesSplit. Each fold trains only on earlier observations and evaluates on later observations; random shuffling is avoided because it can produce unrealistic time-series evaluation.
+The model evaluation uses expanding-window walk-forward validation with scikit-learn `TimeSeriesSplit`. Each fold trains only on earlier observations and evaluates on later observations; random shuffling is avoided because it can produce unrealistic time-series evaluation.
 
 Generated evaluation artifacts contain:
 
@@ -144,17 +146,25 @@ StockSense AI is containerized for separate web, API, database, cache, and worke
 
 **Live URL:** Pending AWS deployment.
 
-Do not publish the historical 99.2% uptime claim until it is backed by an external probe window with recorded successes, failures, timestamps, and version identifiers.
+Do not publish an uptime claim until it is backed by an external probe window with recorded successes, failures, timestamps, and version identifiers.
 
-For the ML 35% accuracy-improvement claim, use the generated walk-forward artifacts from a documented real-data run. The repository's on-demand GitHub Actions workflow is available at `.github/workflows/model-evaluation.yml` and expects a `TWELVE_DATA_API_KEY` repository/environment secret.
+For model-performance claims, use the generated walk-forward artifacts from a documented real-data run. The repository's on-demand GitHub Actions workflow is available at `.github/workflows/model-evaluation.yml` and expects a `TWELVE_DATA_API_KEY` repository/environment secret.
+
+## Verification
+
+The repository has separate paths for fast deterministic CI and credentialed live-data evaluation:
+
+- `make lint` — Ruff linting
+- `make test` — backend tests
+- `make build-frontend` — production frontend build
+- `make train-real` — local live-data training
+- `.github/workflows/model-evaluation.yml` — on-demand real-data evaluation with downloadable artifacts
+
+See [Testing Strategy](docs/testing.md) and [Engineering Decisions](docs/engineering-decisions.md) for the review rationale behind the validation boundaries.
 
 ## Engineering quality
 
-CI runs backend linting and tests plus the frontend production build.
-
-    ruff check app tests
-    pytest -q
-    cd frontend && npm run build
+CI runs backend linting and tests plus the frontend production build. CodeQL scans Python and TypeScript/JavaScript on pushes, pull requests, and a scheduled run. Dependabot is configured for Python, frontend npm, and GitHub Actions dependencies.
 
 Database schema changes are managed through Alembic. Background jobs use ARQ and Redis. Runtime health probes distinguish liveness from dependency readiness.
 
