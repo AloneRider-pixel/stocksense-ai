@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     twelve_data_base_url: str = "https://api.twelvedata.com"
     market_data_max_rows: int = 5000
     market_data_timeout_seconds: float = 10.0
+    market_data_symbols: str = "AAPL,MSFT,GOOGL,AMZN,NVDA"
+    market_data_refresh_hour: int = 22
+    market_data_refresh_minute: int = 30
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -36,6 +39,14 @@ class Settings(BaseSettings):
         if self.allowed_hosts.strip() == "*":
             return ["*"]
         return [value.strip() for value in self.allowed_hosts.split(",") if value.strip()]
+
+    @property
+    def market_data_symbol_list(self) -> list[str]:
+        return [
+            value.strip().upper()
+            for value in self.market_data_symbols.split(",")
+            if value.strip()
+        ]
 
 
 settings = Settings()
