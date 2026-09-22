@@ -47,6 +47,7 @@ button {
   cursor: pointer;
 }
 button:disabled { opacity: .55; cursor: default; }
+.switch-auth { margin-top: 12px; background: transparent; color: #8fa8c7; border: 1px solid #263449; }
 .error { margin-top: 14px; padding: 12px 14px; background: #321b21; border: 1px solid #69333e; border-radius: 10px; color: #ffbdc9; }
 .hint, .muted { color: #7f93ad; font-size: 13px; line-height: 1.6; }
 
