@@ -4,16 +4,19 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   backend:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -49,3 +52,30 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+  reproducibility-evaluation:
+    name: Reproducible sample-data evaluation
+    needs: backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Run walk-forward evaluation on checked-in sample data
+        run: python -m app.services.training --data-path data/sample_prices.csv --limit 1000 --model-version ci-sample-v1
+      - name: Upload evaluation evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: stocksense-sample-evaluation
+          path: |
+            models/metrics.json
+            models/registry.json
+            models/walk_forward_predictions.csv
+          if-no-files-found: error
