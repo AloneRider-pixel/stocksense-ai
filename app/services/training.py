@@ -128,6 +128,7 @@ def main() -> None:
     parser.add_argument("--provider", choices=["twelve_data", "csv"])
     parser.add_argument("--limit", type=int, default=1000)
     parser.add_argument("--data-path", default="data/sample_prices.csv")
+    parser.add_argument("--model-version", default="random-forest-v0.3")
     args = parser.parse_args()
 
     result = train_model(
@@ -135,6 +136,7 @@ def main() -> None:
         symbol=args.symbol,
         provider_name=args.provider,
         limit=args.limit,
+        model_version=args.model_version,
     )
     print(json.dumps(result, indent=2))
 
