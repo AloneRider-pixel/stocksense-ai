@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-import hashlib
 
 import numpy as np
 import pandas as pd
@@ -64,6 +64,7 @@ def walk_forward_evaluate(
         )
         model.fit(train[FEATURE_COLUMNS], train["target"])
         predictions = model.predict(test[FEATURE_COLUMNS])
+        train_end_date = train["date"].max()
 
         for row_index, (_, row) in enumerate(test.iterrows()):
             previous_close = float(row["close"])
