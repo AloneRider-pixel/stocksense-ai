@@ -87,4 +87,5 @@ jobs:
             models/metrics.json
             models/registry.json
             models/walk_forward_predictions.csv
+            models/evidence_verification.json
           if-no-files-found: error
