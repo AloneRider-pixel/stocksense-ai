@@ -140,6 +140,10 @@ Operational:
 
     GET /internal/metrics
 
+## Reproducibility in CI
+
+The standard CI pipeline runs the walk-forward evaluator against the versioned `data/sample_prices.csv` fixture and uploads the resulting metrics, registry metadata, and row-level predictions as an evidence artifact. Live Twelve Data evaluation remains a separate manual workflow.
+
 ## Deployment & Metrics
 
 StockSense AI is containerized for separate web, API, database, cache, and worker services. The repository includes `docs/deployment.md` with the deployment runbook and measurement protocol.
