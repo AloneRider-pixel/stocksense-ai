@@ -42,7 +42,7 @@ jobs:
             --limit "${{ inputs.rows }}"
 
       - name: Publish metrics
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stocksense-model-evaluation-${{ inputs.symbol }}-${{ github.sha }}
           path: |
