@@ -32,3 +32,27 @@ def test_prediction_features_have_expected_shape() -> None:
     features = build_prediction_features(history)
     assert len(features) == 6
     assert all(isinstance(value, float) for value in features)
+
+
+
+def test_training_frame_does_not_cross_contaminate_symbols() -> None:
+    rows = []
+    for symbol, base in (("AAA", 100.0), ("BBB", 1000.0)):
+        for index in range(15):
+            rows.append(
+                {
+                    "date": pd.Timestamp("2025-01-01") + pd.Timedelta(days=index),
+                    "symbol": symbol,
+                    "close": base + index,
+                    "volume": 1_000 + index,
+                }
+            )
+
+    frame = build_training_frame(pd.DataFrame(rows))
+
+    bbb = frame.loc[frame["symbol"] == "BBB"].sort_values("date").reset_index(drop=True)
+
+    assert len(bbb) == 5
+    assert bbb.loc[0, "return_1d"] == pytest.approx(1 / 1000)
+    assert bbb.loc[0, "return_5d"] == pytest.approx(5 / 1000)
+    assert bbb.loc[0, "target"] == pytest.approx(1011.0)
