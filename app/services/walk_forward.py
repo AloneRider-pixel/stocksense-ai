@@ -73,9 +73,8 @@ def walk_forward_evaluate(
             actual_move = np.sign(actual_close - previous_close)
             predicted_move = np.sign(predicted_close - previous_close)
 
-            rows.append(
-                {
-                    "fold": fold,
+            prediction = {
+                "fold": fold,
                     "train_end_date": (
                         train_end_date.date().isoformat()
                         if hasattr(train_end_date, "date")
@@ -91,8 +90,9 @@ def walk_forward_evaluate(
                     "actual_close": actual_close,
                     "baseline_close": previous_close,
                     "direction_correct": int(actual_move == predicted_move),
-                }
-            )
+                "symbol": row["symbol"] if "symbol" in row else None,
+            }
+            rows.append(prediction)
 
     predictions_df = pd.DataFrame(rows)
 
