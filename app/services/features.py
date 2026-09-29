@@ -23,10 +23,17 @@ def build_training_frame(df: pd.DataFrame) -> pd.DataFrame:
 
     if "date" in frame.columns:
         frame["date"] = pd.to_datetime(frame["date"], errors="raise")
-        frame = frame.sort_values("date").drop_duplicates(
-            subset=["date"],
-            keep="last",
-        )
+        if "symbol" in frame.columns:
+            frame["symbol"] = frame["symbol"].astype(str).str.upper()
+            frame = frame.sort_values(["symbol", "date"]).drop_duplicates(
+                subset=["symbol", "date"],
+                keep="last",
+            )
+        else:
+            frame = frame.sort_values("date").drop_duplicates(
+                subset=["date"],
+                keep="last",
+            )
 
     frame["close"] = pd.to_numeric(frame["close"], errors="coerce")
     frame["volume"] = pd.to_numeric(frame["volume"], errors="coerce")
@@ -34,13 +41,32 @@ def build_training_frame(df: pd.DataFrame) -> pd.DataFrame:
     if (frame["close"] <= 0).any() or (frame["volume"] < 0).any():
         raise ValueError("close must be positive and volume must be non-negative")
 
-    frame["return_1d"] = frame["close"].pct_change()
-    frame["return_5d"] = frame["close"].pct_change(5)
-    frame["sma5_ratio"] = frame["close"] / frame["close"].rolling(5).mean()
-    frame["sma10_ratio"] = frame["close"] / frame["close"].rolling(10).mean()
-    frame["volatility5"] = frame["return_1d"].rolling(5).std()
-    frame["volume_change5"] = frame["volume"].pct_change(5)
-    frame["target"] = frame["close"].shift(-1)
+    if "symbol" in frame.columns:
+        grouped = frame.groupby("symbol", sort=False)["close"]
+        frame["return_1d"] = grouped.pct_change()
+        frame["return_5d"] = grouped.pct_change(5)
+        frame["sma5_ratio"] = frame["close"] / grouped.transform(
+            lambda values: values.rolling(5).mean()
+        )
+        frame["sma10_ratio"] = frame["close"] / grouped.transform(
+            lambda values: values.rolling(10).mean()
+        )
+        frame["volatility5"] = grouped.transform(
+            lambda values: values.pct_change().rolling(5).std()
+        )
+        frame["volume_change5"] = (
+            frame.groupby("symbol", sort=False)["volume"].pct_change(5)
+        )
+        frame["target"] = grouped.shift(-1)
+        frame = frame.sort_values(["date", "symbol"])
+    else:
+        frame["return_1d"] = frame["close"].pct_change()
+        frame["return_5d"] = frame["close"].pct_change(5)
+        frame["sma5_ratio"] = frame["close"] / frame["close"].rolling(5).mean()
+        frame["sma10_ratio"] = frame["close"] / frame["close"].rolling(10).mean()
+        frame["volatility5"] = frame["return_1d"].rolling(5).std()
+        frame["volume_change5"] = frame["volume"].pct_change(5)
+        frame["target"] = frame["close"].shift(-1)
 
     return frame.dropna(
         subset=FEATURE_COLUMNS + ["target"]
