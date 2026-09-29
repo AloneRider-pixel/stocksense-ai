@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,6 +32,10 @@ def walk_forward_evaluate(
     n_splits: int = 5,
     random_state: int = 42,
 ) -> WalkForwardResult:
+    canonical = data.copy()
+    canonical = canonical.sort_values(["symbol", "date"]).reset_index(drop=True)
+    data_sha256 = hashlib.sha256(canonical.to_csv(index=False).encode("utf-8")).hexdigest()
+
     frame = build_training_frame(data)
 
     minimum_rows = max(60, n_splits * 10 + 20)
@@ -59,6 +64,7 @@ def walk_forward_evaluate(
         )
         model.fit(train[FEATURE_COLUMNS], train["target"])
         predictions = model.predict(test[FEATURE_COLUMNS])
+        train_end_date = train["date"].max()
 
         for row_index, (_, row) in enumerate(test.iterrows()):
             previous_close = float(row["close"])
@@ -70,6 +76,11 @@ def walk_forward_evaluate(
             rows.append(
                 {
                     "fold": fold,
+                    "train_end_date": (
+                        train_end_date.date().isoformat()
+                        if hasattr(train_end_date, "date")
+                        else str(train_end_date)
+                    ),
                     "prediction_date": (
                         row["date"].date().isoformat()
                         if "date" in row and hasattr(row["date"], "date")
@@ -95,6 +106,8 @@ def walk_forward_evaluate(
 
     metrics: dict[str, float | int | str] = {
         "evaluation": "walk_forward",
+        "data_sha256": data_sha256,
+        "source_rows": int(len(data)),
         "folds": n_splits,
         "test_rows": int(len(predictions_df)),
         "mae": round(model_mae, 6),
