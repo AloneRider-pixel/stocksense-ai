@@ -52,7 +52,7 @@ def test_training_frame_does_not_cross_contaminate_symbols() -> None:
 
     bbb = frame.loc[frame["symbol"] == "BBB"].sort_values("date").reset_index(drop=True)
 
-    assert len(bbb) == 5
-    assert bbb.loc[0, "return_1d"] == pytest.approx(1 / 1009)
-    assert bbb.loc[0, "return_5d"] == pytest.approx(5 / 1005)
-    assert bbb.loc[0, "target"] == pytest.approx(1011.0)
+    assert len(bbb) == 6
+    assert bbb.loc[0, "return_1d"] == pytest.approx(1 / 1008)
+    assert bbb.loc[0, "return_5d"] == pytest.approx(5 / 1004)
+    assert bbb.loc[0, "target"] == pytest.approx(1010.0)
