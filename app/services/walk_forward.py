@@ -75,21 +75,21 @@ def walk_forward_evaluate(
 
             prediction = {
                 "fold": fold,
-                    "train_end_date": (
-                        train_end_date.date().isoformat()
-                        if hasattr(train_end_date, "date")
-                        else str(train_end_date)
-                    ),
-                    "prediction_date": (
-                        row["date"].date().isoformat()
-                        if "date" in row and hasattr(row["date"], "date")
-                        else str(row_index)
-                    ),
-                    "current_close": previous_close,
-                    "predicted_close": predicted_close,
-                    "actual_close": actual_close,
-                    "baseline_close": previous_close,
-                    "direction_correct": int(actual_move == predicted_move),
+                "train_end_date": (
+                    train_end_date.date().isoformat()
+                    if hasattr(train_end_date, "date")
+                    else str(train_end_date)
+                ),
+                "prediction_date": (
+                    row["date"].date().isoformat()
+                    if "date" in row and hasattr(row["date"], "date")
+                    else str(row_index)
+                ),
+                "current_close": previous_close,
+                "predicted_close": predicted_close,
+                "actual_close": actual_close,
+                "baseline_close": previous_close,
+                "direction_correct": int(actual_move == predicted_move),
                 "symbol": row["symbol"] if "symbol" in row else None,
             }
             rows.append(prediction)
