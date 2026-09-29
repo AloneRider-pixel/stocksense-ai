@@ -24,6 +24,9 @@ def test_walk_forward_produces_future_only_predictions() -> None:
     assert result.metrics["folds"] == 5
     assert result.metrics["test_rows"] > 0
     assert result.predictions["prediction_date"].is_monotonic_increasing
-    assert {"predicted_close", "actual_close", "baseline_close"} <= set(
+    assert {"predicted_close", "actual_close", "baseline_close", "train_end_date"} <= set(
         result.predictions.columns
     )
+    assert (result.predictions["prediction_date"] > result.predictions["train_end_date"]).all()
+    assert len(result.metrics["data_sha256"]) == 64
+    assert result.metrics["source_rows"] == 140
