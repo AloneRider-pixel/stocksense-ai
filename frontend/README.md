@@ -1,16 +1,40 @@
 # StockSense AI Web
 
-Production-style React dashboard for the StockSense AI market intelligence platform.
+React dashboard for the StockSense AI API.
 
-## Run locally
+## Scope
 
+- Authentication.
+- Prediction execution.
+- Per-user prediction history.
+- Evaluation/result views.
+
+The frontend is a thin client: market-data provider credentials, model execution, and scoring remain server-side.
+
+## Local development
+
+From repository root:
+
+```bash
+cd frontend
 npm install
 npm run dev
+```
 
-Set VITE_API_BASE_URL when the API is not running on localhost.
+Set `VITE_API_BASE_URL` when the API is not on localhost.
 
-The dashboard currently provides authentication, prediction execution, and per-user prediction history. Navigation is structured for future watchlist, portfolio, alert, and analytics modules.
+## Verification
+
+```bash
+npm run build
+```
+
+Repository CI additionally runs backend lint/tests and the reproducible sample-data evaluation.
+
+## Security
+
+Do not put provider or database credentials in browser configuration. Keep user-scoped data authorization on the backend and validate API errors/empty states in UI flows.
 
 ## Review path
 
-This client consumes the StockSense API and should remain free of provider secrets. Validate authentication, API-base configuration, production build output, and user-scoped history whenever the frontend data flows change.
+Review `src/lib/api.js`, authentication flows, and data rendering when API contracts change.
