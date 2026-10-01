@@ -190,3 +190,11 @@ Predictions are informational and are not investment advice. The bundled CSV dat
 ## License
 
 MIT
+
+## Repository review path
+
+Start with [testing](docs/testing.md), [security](docs/security.md), [operations](docs/operations.md), and [model evaluation](docs/model-evaluation.md). Keep deterministic CI separate from credentialed live-data evaluation so repository checks remain reproducible.
+
+## Maintenance standard
+
+Keep time-series validation leakage-safe, preserve prediction-versus-actual reconciliation, protect user-scoped data, and never present sample-data or backtest metrics as universal investment performance.
