@@ -1,63 +1,51 @@
-# StockSense AI
+# StockSense AI — Market Intelligence & Evaluation
 
 [![CI](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/codeql.yml/badge.svg)](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Market-intelligence platform for stock analysis, next-period prediction, evaluation, and monitoring.
+Market-intelligence application for stock analysis, chronological prediction evaluation, monitoring, and a React dashboard.
 
 ## Product surface
 
-- JWT-authenticated user accounts.
-- Configurable market-data ingestion with a Twelve Data integration.
-- Technical feature engineering and expanding-window walk-forward evaluation.
-- Next-period price prediction and prediction-vs-actual reconciliation.
-- Per-user prediction history and evaluation metrics.
-- Redis caching/rate limiting, PostgreSQL persistence, background workers, and runtime metrics.
-- React dashboard and Dockerized local stack.
+- JWT-authenticated accounts and user-scoped prediction history.
+- Twelve Data market-data integration with server-side provider credentials.
+- Feature engineering and expanding-window walk-forward evaluation.
+- Prediction generation and prediction-vs-actual reconciliation.
+- Redis caching/rate limiting, PostgreSQL persistence, and background workers.
+- Reproducible sample-data evaluation and model-evidence verification.
 
 ## Architecture
 
 ```text
-React Web App
-     ↓
-FastAPI
+React dashboard
+      ↓
+FastAPI API
  ├── Auth / authorization
- ├── Market data service → provider
- ├── Prediction service → Redis / PostgreSQL
+ ├── Market-data service → provider
+ ├── Predictor → Redis / PostgreSQL
  └── Evaluation APIs
-              ↓
-        Background worker
+      ↓
+Background workers
 ```
 
-## ML evaluation
+## Evaluation contract
 
-StockSense uses chronological walk-forward evaluation so each fold trains only on information available before the evaluated period.
+Evaluation is chronological: each evaluated period is restricted to information available before that period. CI exercises the checked-in sample dataset and verifies the resulting evidence metadata.
 
-CI runs evaluation against the checked-in sample dataset and stores:
+Sample-fixture results are reproducibility evidence, not universal or production performance claims.
 
-- metrics
-- model registry metadata
-- row-level predictions
-- evidence verification output
+## Stack
 
-Live-provider evaluation is explicitly separated into an on-demand workflow and requires the corresponding repository/environment secret.
-
-Do not interpret sample-fixture metrics as universal model performance.
-
-## API surface
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/api/v1/auth/register` | Register |
-| POST | `/api/v1/auth/login` | Authenticate |
-| GET | `/api/v1/stocks/{symbol}/history` | Historical market data |
-| POST | `/api/v1/stocks/{symbol}/ingest` | Ingest/refresh |
-| POST | `/api/v1/predict` | Generate prediction |
-| GET | `/api/v1/predictions` | Prediction history |
-| GET | `/api/v1/predictions/evaluation` | Reconciled results |
-| GET | `/api/v1/health` | Health |
-| GET | `/api/v1/metrics` | Runtime metrics |
+| Layer | Technology |
+|---|---|
+| API | FastAPI, Python |
+| Data | PostgreSQL, SQLAlchemy, Alembic |
+| Cache / limits | Redis |
+| ML | scikit-learn / feature pipeline |
+| Market data | Twelve Data |
+| Frontend | React, Vite |
+| Delivery | Docker, GitHub Actions |
 
 ## Quick start
 
@@ -92,36 +80,37 @@ docker compose up --build
 make lint
 make test
 make build-frontend
+python scripts/verify_sample_evidence.py
 ```
 
-For a deterministic model run:
+For the deterministic sample run:
 
 ```bash
 python -m app.services.training --data-path data/sample_prices.csv --limit 1000 --model-version ci-sample-v1
-python scripts/verify_sample_evidence.py
 ```
 
 ## Security
 
-Passwords are hashed with scrypt; JWTs protect authenticated endpoints; prediction history is user-scoped; Redis rate limiting protects API paths; request validation is enabled; provider secrets remain server-side.
+Passwords are hashed, JWT-protected endpoints are user-scoped, provider secrets remain server-side, request validation is enforced, and Redis-backed rate limits protect API paths.
 
-See [docs/security.md](docs/security.md) and [docs/operations.md](docs/operations.md).
-
-## Deployment
-
-The application is containerized for separate web/API/database/cache/worker roles. The repository includes a deployment runbook. Live deployment and uptime claims should only be published with externally measured evidence.
+See [docs/security.md](docs/security.md) and [SECURITY.md](SECURITY.md).
 
 ## Limitations
 
-Predictions are informational and are not investment advice. Production model claims require real historical data, leakage-safe evaluation, baseline comparisons, and documented data provenance.
+Predictions are informational and are not investment advice. Meaningful model claims require representative historical data, leakage-safe evaluation, baseline comparison, data provenance, and a reproducible experiment.
 
-## Review path
+## Documentation
 
-Start with [testing](docs/testing.md), [security](docs/security.md), [model evaluation](docs/model-evaluation.md), and [engineering decisions](docs/engineering-decisions.md).
+- [Architecture](docs/architecture.md)
+- [Model evaluation](docs/model-evaluation.md)
+- [Testing](docs/testing.md)
+- [Security](docs/security.md)
+- [Operations](docs/operations.md)
+- [Engineering decisions](docs/engineering-decisions.md)
 
 ## Maintenance standard
 
-Keep time-series evaluation leakage-safe, user data scoped, provider secrets server-side, and model claims tied to reproducible evidence.
+Preserve chronological evaluation boundaries, user-data isolation, provider-secret separation, deterministic evidence, and safe rate limiting.
 
 ## License
 
