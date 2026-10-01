@@ -1,33 +1,26 @@
 # StockSense AI Model Artifacts
 
-This directory documents runtime-generated model/evaluation outputs; generated artifacts are intentionally not treated as source-control truth.
+The `models/` directory is an artifact boundary for generated model and evaluation outputs. Generated files are runtime evidence, not authoritative source code.
 
-## Generated outputs
+## Expected artifacts
 
-- `stocksense_rf.joblib` — serialized model artifact when produced.
-- `metrics.json` — evaluation metrics.
-- `registry.json` — model version, features, dataset/source, timestamp, and status.
-- `walk_forward_predictions.csv` — row-level evaluation predictions in reproducible evaluation runs.
+Depending on the workflow, generated outputs may include:
 
-Run training from the repository root with the training module used by the current workflow.
+- serialized model artifacts;
+- evaluation metrics;
+- registry metadata;
+- row-level walk-forward predictions.
 
-## Artifact integrity
+Each promoted artifact should retain or reference its model version, feature set, dataset/source, cutoff or evaluation period, method, metrics, timestamp, and producing commit.
 
-For a promoted model, preserve:
+## Integrity rules
 
-- model version;
-- feature set;
-- dataset/source and cutoff;
-- evaluation method and metrics;
-- training timestamp;
-- producing commit.
+- Do not commit credentials or raw user/customer data.
+- Do not treat an artifact without provenance as reproducible evidence.
+- Do not compare results across runs without identifying dataset, method, environment, and model version.
 
-Do not place credentials or raw customer/user data in model bundles.
+See [model evaluation](../docs/model-evaluation.md) and the repository verification workflow.
 
-## Evidence
+## License
 
-Generated metrics are meaningful only with their dataset and methodology. The checked-in sample fixture is for reproducibility, not a universal production-performance claim.
-
-## Review path
-
-Start with [model evaluation](../docs/model-evaluation.md) and the repository CI workflow before changing artifact schemas or promotion behavior.
+MIT
