@@ -1,19 +1,33 @@
-# Model Artifacts
+# StockSense AI Model Artifacts
 
-Runtime-generated artifacts are intentionally kept out of source control.
+This directory documents runtime-generated model/evaluation outputs; generated artifacts are intentionally not treated as source-control truth.
 
-The training service writes:
+## Generated outputs
 
-- stocksense_rf.joblib: serialized model artifact
-- metrics.json: evaluation metrics
-- registry.json: model version, feature set, dataset, training time, and status
+- `stocksense_rf.joblib` — serialized model artifact when produced.
+- `metrics.json` — evaluation metrics.
+- `registry.json` — model version, features, dataset/source, timestamp, and status.
+- `walk_forward_predictions.csv` — row-level evaluation predictions in reproducible evaluation runs.
 
-Run:
+Run training from the repository root with the training module used by the current workflow.
 
-    python -m app.services.training
+## Artifact integrity
 
-The registry format provides a stable boundary for later model promotion and rollback workflows.
+For a promoted model, preserve:
 
-## Artifact safety
+- model version;
+- feature set;
+- dataset/source and cutoff;
+- evaluation method and metrics;
+- training timestamp;
+- producing commit.
 
-Model files and generated metrics are runtime artifacts, not source-controlled truth. Record model version, feature set, dataset provenance, evaluation method, and training timestamp with any promoted artifact, and keep credentials and raw customer data out of artifact bundles.
+Do not place credentials or raw customer/user data in model bundles.
+
+## Evidence
+
+Generated metrics are meaningful only with their dataset and methodology. The checked-in sample fixture is for reproducibility, not a universal production-performance claim.
+
+## Review path
+
+Start with [model evaluation](../docs/model-evaluation.md) and the repository CI workflow before changing artifact schemas or promotion behavior.
