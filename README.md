@@ -6,34 +6,28 @@
 
 Market-intelligence application for stock analysis, chronological prediction evaluation, monitoring, and a React dashboard.
 
-## Product surface
+## What it demonstrates
 
-- JWT-authenticated accounts and user-scoped prediction history.
-- Twelve Data market-data integration with server-side provider credentials.
-- Feature engineering and expanding-window walk-forward evaluation.
+- JWT-authenticated accounts with user-scoped prediction history.
+- Server-side Twelve Data integration and provider-secret isolation.
+- Feature engineering with expanding-window walk-forward evaluation.
 - Prediction generation and prediction-vs-actual reconciliation.
 - Redis caching/rate limiting, PostgreSQL persistence, and background workers.
-- Reproducible sample-data evaluation and model-evidence verification.
+- Reproducible sample-data evaluation and evidence verification.
 
 ## Architecture
 
-```text
-React dashboard
-      ↓
-FastAPI API
- ├── Auth / authorization
- ├── Market-data service → provider
- ├── Predictor → Redis / PostgreSQL
- └── Evaluation APIs
-      ↓
-Background workers
+```mermaid
+graph TB
+    UI[React Dashboard] --> API[FastAPI]
+    API --> AUTH[Auth / authorization]
+    API --> DATA[Market Data Provider]
+    API --> MODEL[Prediction / feature pipeline]
+    MODEL --> REDIS[(Redis)]
+    MODEL --> PG[(PostgreSQL)]
+    API --> EVAL[Evaluation APIs]
+    WORKER[Background Worker] --> MODEL
 ```
-
-## Evaluation contract
-
-Evaluation is chronological: each evaluated period is restricted to information available before that period. CI exercises the checked-in sample dataset and verifies the resulting evidence metadata.
-
-Sample-fixture results are reproducibility evidence, not universal or production performance claims.
 
 ## Stack
 
@@ -46,6 +40,18 @@ Sample-fixture results are reproducibility evidence, not universal or production
 | Market data | Twelve Data |
 | Frontend | React, Vite |
 | Delivery | Docker, GitHub Actions |
+
+## Evaluation contract
+
+Evaluation is chronological: each prediction period is restricted to information available before that period. Sample-fixture results are reproducibility evidence, not universal or production performance claims.
+
+A credible model-quality claim should include:
+- a representative dataset and provenance;
+- leakage controls and temporal boundaries;
+- a baseline comparison;
+- the metric definition and sample count;
+- the environment/model version; and
+- the producing commit or experiment artifact.
 
 ## Quick start
 
@@ -83,7 +89,7 @@ make build-frontend
 python scripts/verify_sample_evidence.py
 ```
 
-For the deterministic sample run:
+For the deterministic sample pipeline:
 
 ```bash
 python -m app.services.training --data-path data/sample_prices.csv --limit 1000 --model-version ci-sample-v1
@@ -91,13 +97,13 @@ python -m app.services.training --data-path data/sample_prices.csv --limit 1000 
 
 ## Security
 
-Passwords are hashed, JWT-protected endpoints are user-scoped, provider secrets remain server-side, request validation is enforced, and Redis-backed rate limits protect API paths.
+Passwords are hashed, protected endpoints are user-scoped, provider secrets remain server-side, request validation is enforced, and Redis-backed rate limits protect API paths.
 
 See [docs/security.md](docs/security.md) and [SECURITY.md](SECURITY.md).
 
 ## Limitations
 
-Predictions are informational and are not investment advice. Meaningful model claims require representative historical data, leakage-safe evaluation, baseline comparison, data provenance, and a reproducible experiment.
+Predictions are informational and are not investment advice. Backtest results can fail to generalize. Avoid presenting sample fixtures or historical simulations as guarantees of future market behavior.
 
 ## Documentation
 
@@ -108,9 +114,9 @@ Predictions are informational and are not investment advice. Meaningful model cl
 - [Operations](docs/operations.md)
 - [Engineering decisions](docs/engineering-decisions.md)
 
-## Maintenance standard
+## Contribution standard
 
-Preserve chronological evaluation boundaries, user-data isolation, provider-secret separation, deterministic evidence, and safe rate limiting.
+Preserve chronological evaluation boundaries, user-data isolation, provider-secret separation, deterministic evidence, and rate limiting. Behavioral changes should add or update regression tests.
 
 ## License
 
