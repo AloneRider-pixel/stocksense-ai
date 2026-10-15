@@ -50,3 +50,35 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+DEFAULT_DATABASE_URL = "postgresql+psycopg://stocksense:stocksense@localhost:5432/stocksense"
+INSECURE_JWT_SECRETS = {
+    "change-this-in-production",
+    "local-development-secret-change-me",
+    "replace-with-a-random-secret-of-at-least-32-characters",
+}
+
+
+def validate_production_settings(config: Settings) -> None:
+    """Fail closed when production configuration still contains development defaults."""
+    if config.environment.strip().lower() != "production":
+        return
+
+    if config.jwt_secret in INSECURE_JWT_SECRETS or len(config.jwt_secret) < 32:
+        raise RuntimeError("JWT_SECRET must be a non-placeholder secret of at least 32 characters in production.")
+
+    if config.allowed_host_list == ["*"] or not config.allowed_host_list:
+        raise RuntimeError("ALLOWED_HOSTS must explicitly list trusted production hostnames.")
+
+    if config.database_url == DEFAULT_DATABASE_URL:
+        raise RuntimeError("DATABASE_URL must be explicitly configured for production.")
+
+    try:
+        from urllib.parse import urlsplit
+
+        parsed = urlsplit(config.database_url)
+    except ValueError as exc:
+        raise RuntimeError("DATABASE_URL is invalid for production.") from exc
+
+    if parsed.username == "stocksense" and parsed.password == "stocksense":
+        raise RuntimeError("DATABASE_URL must not use the default development database credentials.")
