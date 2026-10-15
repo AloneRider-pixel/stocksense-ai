@@ -71,6 +71,7 @@ INSECURE_DATABASE_PASSWORDS = {
     "postgres",
     "admin",
 }
+LOCAL_HOSTNAMES = {"localhost", "127.0.0.1", "::1", "postgres", "redis"}
 
 
 def validate_production_settings(config: Settings) -> None:
@@ -85,9 +86,11 @@ def validate_production_settings(config: Settings) -> None:
         )
 
     allowed_hosts = config.allowed_host_list
-    if not allowed_hosts or any("*" in host for host in allowed_hosts):
+    if not allowed_hosts or any(
+        "*" in host or host.casefold() in LOCAL_HOSTNAMES for host in allowed_hosts
+    ):
         raise RuntimeError(
-            "ALLOWED_HOSTS must explicitly list trusted production hostnames without wildcards."
+            "ALLOWED_HOSTS must explicitly list trusted production hostnames without wildcards or local names."
         )
 
     cors_origins = config.cors_origin_list
@@ -103,7 +106,7 @@ def validate_production_settings(config: Settings) -> None:
             parsed_origin.scheme != "https"
             or not parsed_origin.hostname
             or "*" in parsed_origin.hostname
-            or parsed_origin.hostname.casefold() in {"localhost", "127.0.0.1", "::1"}
+            or parsed_origin.hostname.casefold() in LOCAL_HOSTNAMES
             or parsed_origin.username
             or parsed_origin.password
             or parsed_origin.path not in {"", "/"}
@@ -126,18 +129,35 @@ def validate_production_settings(config: Settings) -> None:
     if (
         parsed_database.scheme not in {"postgresql", "postgresql+psycopg"}
         or not parsed_database.hostname
+        or parsed_database.hostname.casefold() in LOCAL_HOSTNAMES
         or not parsed_database.username
         or not parsed_database.password
         or not parsed_database.path.strip("/")
         or database_port == 0
     ):
         raise RuntimeError(
-            "DATABASE_URL must be a valid PostgreSQL URL with explicit host, database, user, and password."
+            "DATABASE_URL must use a non-local PostgreSQL host and include database, user, and password."
         )
 
     database_password = unquote(parsed_database.password).casefold()
     if database_password in INSECURE_DATABASE_PASSWORDS:
         raise RuntimeError("DATABASE_URL must not use default development database credentials.")
+
+    try:
+        parsed_redis = urlsplit(config.redis_url)
+        redis_port = parsed_redis.port
+    except ValueError as exc:
+        raise RuntimeError("REDIS_URL is invalid for production.") from exc
+
+    if (
+        parsed_redis.scheme != "rediss"
+        or not parsed_redis.hostname
+        or parsed_redis.hostname.casefold() in LOCAL_HOSTNAMES
+        or redis_port == 0
+    ):
+        raise RuntimeError(
+            "REDIS_URL must use rediss:// with a non-local production Redis hostname."
+        )
 
 
 # Instantiate only after validate_production_settings is defined, because the
