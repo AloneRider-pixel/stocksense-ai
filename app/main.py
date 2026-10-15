@@ -21,10 +21,7 @@ from app.services.cache import PredictionCache
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    if settings.environment == "production" and settings.jwt_secret == "change-this-in-production":
-        raise RuntimeError("JWT_SECRET must be replaced in production.")
-
-    if settings.environment != "production":
+    if settings.environment.strip().casefold() != "production":
         try:
             init_db()
         except Exception:

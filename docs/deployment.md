@@ -2,9 +2,27 @@
 
 ## Current deployment status
 
-StockSense AI is containerized and deployment-ready, but no public production URL is configured in this repository yet.
+StockSense AI is containerized and deployment-ready for evaluation, but no public production URL is configured in this repository yet.
 
 **Live URL:** Pending AWS deployment.
+
+## Local Docker Compose versus production
+
+The repository's `docker-compose.yml` is for local development only. It uses intentionally weak sample credentials, enables development mode by default, and binds published ports to `127.0.0.1`. Do not expose this development stack to the internet or treat its sample settings as production-ready.
+
+Production API and worker services should run as separate services with managed PostgreSQL and Redis. Supply configuration through the deployment platform or a secret manager; do not copy the sample credentials from `.env.example`.
+
+At minimum, explicitly configure the following for both API and worker:
+
+- `ENVIRONMENT=production`
+- `JWT_SECRET`: random secret, at least 32 characters, held in a secret manager
+- `DATABASE_URL`: PostgreSQL URL with explicit non-local host, database, user, and strong password (URL-encode reserved characters)
+- `REDIS_URL`: TLS-enabled `rediss://` URL with a non-local production endpoint
+- `ALLOWED_HOSTS`: comma-separated exact hostnames; wildcards and local service names are rejected
+- `CORS_ORIGINS`: comma-separated HTTPS origins; localhost, HTTP origins, paths, and wildcards are rejected
+- `TWELVE_DATA_API_KEY`: secret-manager value if using Twelve Data
+
+Application startup fails closed when production JWT, database, Redis, host, or CORS settings contain development defaults or invalid values. Configure the same required settings for the background worker because it loads the same settings model.
 
 ## Intended runtime
 
@@ -68,13 +86,14 @@ The generated models/metrics.json should only be committed when it was produced 
 
 1. Set MARKET_DATA_PROVIDER=twelve_data.
 2. Store TWELVE_DATA_API_KEY in a secret manager.
-3. Run alembic upgrade head.
-4. Start API and worker as separate services.
-5. Run an initial historical ingestion.
-6. Run live-data training and review the walk-forward metrics.
-7. Promote the reviewed model version.
-8. Configure uptime, latency, worker, and data-freshness alerts.
-9. Record deployment and rollback identifiers.
+3. Configure and validate production environment variables for API and worker.
+4. Run alembic upgrade head.
+5. Start API and worker as separate services.
+6. Run an initial historical ingestion.
+7. Run live-data training and review the walk-forward metrics.
+8. Promote the reviewed model version.
+9. Configure uptime, latency, worker, and data-freshness alerts.
+10. Record deployment and rollback identifiers.
 
 ## Local verification
 

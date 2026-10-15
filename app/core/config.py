@@ -1,3 +1,5 @@
+from urllib.parse import unquote, urlsplit
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -61,31 +63,101 @@ INSECURE_JWT_SECRETS = {
     "local-development-secret-change-me",
     "replace-with-a-random-secret-of-at-least-32-characters",
 }
+INSECURE_DATABASE_PASSWORDS = {
+    "stocksense",
+    "local-development-password-change-me",
+    "change-me",
+    "password",
+    "postgres",
+    "admin",
+}
+LOCAL_HOSTNAMES = {"localhost", "127.0.0.1", "::1", "postgres", "redis"}
 
 
 def validate_production_settings(config: Settings) -> None:
-    """Fail closed when production configuration still contains development defaults."""
-    if config.environment.strip().lower() != "production":
+    """Fail closed when production configuration contains development defaults."""
+    if config.environment.strip().casefold() != "production":
         return
 
-    if config.jwt_secret in INSECURE_JWT_SECRETS or len(config.jwt_secret) < 32:
-        raise RuntimeError("JWT_SECRET must be a non-placeholder secret of at least 32 characters in production.")
+    secret = config.jwt_secret.strip()
+    if secret.casefold() in INSECURE_JWT_SECRETS or len(secret) < 32:
+        raise RuntimeError(
+            "JWT_SECRET must be a non-placeholder secret of at least 32 characters in production."
+        )
 
-    if config.allowed_host_list == ["*"] or not config.allowed_host_list:
-        raise RuntimeError("ALLOWED_HOSTS must explicitly list trusted production hostnames.")
+    allowed_hosts = config.allowed_host_list
+    if not allowed_hosts or any(
+        "*" in host or host.casefold() in LOCAL_HOSTNAMES for host in allowed_hosts
+    ):
+        raise RuntimeError(
+            "ALLOWED_HOSTS must explicitly list trusted production hostnames without wildcards or local names."
+        )
+
+    cors_origins = config.cors_origin_list
+    if not cors_origins:
+        raise RuntimeError("CORS_ORIGINS must explicitly list trusted HTTPS production origins.")
+
+    for origin in cors_origins:
+        try:
+            parsed_origin = urlsplit(origin)
+        except ValueError as exc:
+            raise RuntimeError("CORS_ORIGINS contains an invalid production origin.") from exc
+        if (
+            parsed_origin.scheme != "https"
+            or not parsed_origin.hostname
+            or "*" in parsed_origin.hostname
+            or parsed_origin.hostname.casefold() in LOCAL_HOSTNAMES
+            or parsed_origin.username
+            or parsed_origin.password
+            or parsed_origin.path not in {"", "/"}
+            or parsed_origin.query
+            or parsed_origin.fragment
+        ):
+            raise RuntimeError(
+                "CORS_ORIGINS must contain only explicit HTTPS production origins."
+            )
 
     if config.database_url == DEFAULT_DATABASE_URL:
         raise RuntimeError("DATABASE_URL must be explicitly configured for production.")
 
     try:
-        from urllib.parse import urlsplit
-
-        parsed = urlsplit(config.database_url)
+        parsed_database = urlsplit(config.database_url)
+        database_port = parsed_database.port
     except ValueError as exc:
         raise RuntimeError("DATABASE_URL is invalid for production.") from exc
 
-    if parsed.password in {"stocksense", "local-development-password-change-me", "change-me"}:
+    if (
+        parsed_database.scheme not in {"postgresql", "postgresql+psycopg"}
+        or not parsed_database.hostname
+        or parsed_database.hostname.casefold() in LOCAL_HOSTNAMES
+        or not parsed_database.username
+        or not parsed_database.password
+        or not parsed_database.path.strip("/")
+        or database_port == 0
+    ):
+        raise RuntimeError(
+            "DATABASE_URL must use a non-local PostgreSQL host and include database, user, and password."
+        )
+
+    database_password = unquote(parsed_database.password).casefold()
+    if database_password in INSECURE_DATABASE_PASSWORDS:
         raise RuntimeError("DATABASE_URL must not use default development database credentials.")
+
+    try:
+        parsed_redis = urlsplit(config.redis_url)
+        redis_port = parsed_redis.port
+    except ValueError as exc:
+        raise RuntimeError("REDIS_URL is invalid for production.") from exc
+
+    if (
+        parsed_redis.scheme != "rediss"
+        or not parsed_redis.hostname
+        or parsed_redis.hostname.casefold() in LOCAL_HOSTNAMES
+        or redis_port == 0
+    ):
+        raise RuntimeError(
+            "REDIS_URL must use rediss:// with a non-local production Redis hostname."
+        )
 
 
 # Instantiate only after validate_production_settings is defined, because the

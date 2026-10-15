@@ -74,11 +74,13 @@ npm install
 npm run dev
 ```
 
-Full stack:
+Full stack (local development only):
 
 ```bash
 docker compose up --build
 ```
+
+The sample values in `.env.example` and `docker-compose.yml` are development-only. The full-stack Compose ports bind to localhost, and production mode rejects placeholder JWT secrets, weak or local database URLs, unsecured Redis URLs, wildcard/local hosts, invalid database URLs, and non-HTTPS or wildcard CORS origins. See [the deployment guide](docs/deployment.md) before configuring production services.
 
 ## Verification
 
@@ -99,7 +101,7 @@ python -m app.services.training --data-path data/sample_prices.csv --limit 1000 
 
 Passwords are hashed, protected endpoints are user-scoped, provider secrets remain server-side, request validation is enforced, and Redis-backed rate limits protect API paths.
 
-See [docs/security.md](docs/security.md) and [SECURITY.md](SECURITY.md).
+See [docs/security.md](docs/security.md), [docs/deployment.md](docs/deployment.md), and [SECURITY.md](SECURITY.md).
 
 ## Limitations
 
@@ -112,6 +114,7 @@ Predictions are informational and are not investment advice. Backtest results ca
 - [Testing](docs/testing.md)
 - [Security](docs/security.md)
 - [Operations](docs/operations.md)
+- [Deployment](docs/deployment.md)
 - [Engineering decisions](docs/engineering-decisions.md)
 
 ## Contribution standard
