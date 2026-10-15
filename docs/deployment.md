@@ -16,13 +16,13 @@ At minimum, explicitly configure the following for both API and worker:
 
 - `ENVIRONMENT=production`
 - `JWT_SECRET`: random secret, at least 32 characters, held in a secret manager
-- `DATABASE_URL`: PostgreSQL URL with explicit host, database, user, and strong password (URL-encode reserved characters)
-- `REDIS_URL`: protected production Redis endpoint
-- `ALLOWED_HOSTS`: comma-separated exact hostnames; wildcards are rejected
+- `DATABASE_URL`: PostgreSQL URL with explicit non-local host, database, user, and strong password (URL-encode reserved characters)
+- `REDIS_URL`: TLS-enabled `rediss://` URL with a non-local production endpoint
+- `ALLOWED_HOSTS`: comma-separated exact hostnames; wildcards and local service names are rejected
 - `CORS_ORIGINS`: comma-separated HTTPS origins; localhost, HTTP origins, paths, and wildcards are rejected
 - `TWELVE_DATA_API_KEY`: secret-manager value if using Twelve Data
 
-Application startup fails closed when production JWT, database, host, or CORS settings contain development defaults or invalid values. Configure the same required settings for the background worker because it loads the same settings model.
+Application startup fails closed when production JWT, database, Redis, host, or CORS settings contain development defaults or invalid values. Configure the same required settings for the background worker because it loads the same settings model.
 
 ## Intended runtime
 
