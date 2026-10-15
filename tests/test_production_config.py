@@ -48,6 +48,7 @@ def test_production_rejects_wildcard_hosts() -> None:
     "database_url",
     [
         DEFAULT_DATABASE_URL,
+        "postgresql+psycopg://stocksense:local-development-password-change-me@db.example.com:5432/stocksense",
         "postgresql+psycopg://stocksense:stocksense@db.example.com:5432/stocksense",
     ],
 )
