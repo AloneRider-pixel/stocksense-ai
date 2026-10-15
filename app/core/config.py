@@ -55,8 +55,6 @@ class Settings(BaseSettings):
         ]
 
 
-settings = Settings()
-
 DEFAULT_DATABASE_URL = "postgresql+psycopg://stocksense:stocksense@localhost:5432/stocksense"
 INSECURE_JWT_SECRETS = {
     "change-this-in-production",
@@ -88,3 +86,8 @@ def validate_production_settings(config: Settings) -> None:
 
     if parsed.password in {"stocksense", "local-development-password-change-me", "change-me"}:
         raise RuntimeError("DATABASE_URL must not use default development database credentials.")
+
+
+# Instantiate only after validate_production_settings is defined, because the
+# Settings model validator calls it while loading this module.
+settings = Settings()
