@@ -86,5 +86,5 @@ def validate_production_settings(config: Settings) -> None:
     except ValueError as exc:
         raise RuntimeError("DATABASE_URL is invalid for production.") from exc
 
-    if parsed.username == "stocksense" and parsed.password == "stocksense":
-        raise RuntimeError("DATABASE_URL must not use the default development database credentials.")
+    if parsed.password in {"stocksense", "local-development-password-change-me", "change-me"}:
+        raise RuntimeError("DATABASE_URL must not use default development database credentials.")
