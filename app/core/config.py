@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +28,11 @@ class Settings(BaseSettings):
     market_data_symbols: str = "AAPL,MSFT,GOOGL,AMZN,NVDA"
     market_data_refresh_hour: int = 22
     market_data_refresh_minute: int = 30
+
+    @model_validator(mode="after")
+    def reject_insecure_production_defaults(self) -> "Settings":
+        validate_production_settings(self)
+        return self
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
