@@ -104,7 +104,7 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
           {symbols.map((s) => (
             <div className="ticker-card" key={s.symbol}>
               <span className="ticker-symbol">{s.symbol}</span>
-              <strong>${s.close.toFixed(2)}</strong>
+              <strong>{(s.currency === "INR" ? "₹" : "$") + s.close.toLocaleString(s.currency === "INR" ? "en-IN" : "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
               <span className={(s.change_pct ?? 0) >= 0 ? "positive" : "negative"}>
                 {s.change_pct == null ? "—" : (s.change_pct >= 0 ? "+" : "") + s.change_pct.toFixed(2) + "%"}
               </span>

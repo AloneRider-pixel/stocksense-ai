@@ -9,6 +9,22 @@ function fmtPct(v) {
   return (v >= 0 ? "+" : "") + Number(v).toFixed(2) + "%";
 }
 
+function fmtPrice(currency, v) {
+  if (v == null) return "—";
+  const sym = currency === "INR" ? "₹" : "$";
+  const locale = currency === "INR" ? "en-IN" : "en-US";
+  return sym + Number(v).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+const INDICATOR_TOGGLES = [
+  ["sma20", "SMA 20"],
+  ["sma50", "SMA 50"],
+  ["ema", "EMA 12·26"],
+  ["bollinger", "Bollinger"],
+  ["rsi", "RSI"],
+  ["macd", "MACD"],
+];
+
 export default function Dashboard({ user, onSignOut }) {
   const [tab, setTab] = useState("overview");
   const [symbols, setSymbols] = useState(FALLBACK_SYMBOLS);
@@ -18,6 +34,10 @@ export default function Dashboard({ user, onSignOut }) {
   const [history, setHistory] = useState([]);
   const [evaluation, setEvaluation] = useState(null);
   const [offlineMetrics, setOfflineMetrics] = useState(null);
+  const [symbolMeta, setSymbolMeta] = useState({});
+  const [exchange, setExchange] = useState("ALL");
+  const [indicators, setIndicators] = useState(null);
+  const [overlays, setOverlays] = useState({ sma20: true, sma50: false, ema: false, bollinger: false, rsi: false, macd: false });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [dataSource, setDataSource] = useState("");
@@ -30,6 +50,18 @@ export default function Dashboard({ user, onSignOut }) {
           setSymbols(list);
           setSymbol((cur) => (list.includes(cur) ? cur : list[0]));
           setDataSource(ov.data_source || "");
+          const meta = {};
+          ov.symbols.forEach((s) => { meta[s.symbol] = s; });
+          setSymbolMeta((prev) => ({ ...prev, ...meta }));
+        }
+      })
+      .catch(() => {});
+    api("/symbols")
+      .then((list) => {
+        if (Array.isArray(list)) {
+          const meta = {};
+          list.forEach((s) => { meta[s.symbol] = s; });
+          setSymbolMeta((prev) => ({ ...prev, ...meta }));
         }
       })
       .catch(() => {});
@@ -37,9 +69,14 @@ export default function Dashboard({ user, onSignOut }) {
 
   useEffect(() => {
     setBars([]);
+    setIndicators(null);
+    setPrediction(null);
     api("/stocks/" + symbol + "/history?limit=150")
       .then(setBars)
       .catch(() => setBars([]));
+    api("/stocks/" + symbol + "/indicators?limit=150")
+      .then(setIndicators)
+      .catch(() => setIndicators(null));
   }, [symbol]);
 
   useEffect(() => {
@@ -82,6 +119,10 @@ export default function Dashboard({ user, onSignOut }) {
   }
 
   const firstName = user.full_name || user.email.split("@")[0];
+  const currency = symbolMeta[symbol]?.currency || "USD";
+  const exchangeOf = (s) => symbolMeta[s]?.exchange || "US";
+  const visibleSymbols = exchange === "ALL" ? symbols : symbols.filter((s) => exchangeOf(s) === exchange);
+  const hasNse = symbols.some((s) => exchangeOf(s) === "NSE");
 
   return (
     <div className="app-shell">
@@ -109,7 +150,7 @@ export default function Dashboard({ user, onSignOut }) {
         {tab === "overview" && (
           <>
             <section className="metric-grid">
-              <article><span>Latest close · {symbol}</span><strong>{market ? "$" + market.close.toFixed(2) : "—"}</strong><small>{market ? market.date : "Loading market data"}</small></article>
+              <article><span>Latest close · {symbol}</span><strong>{market ? fmtPrice(currency, market.close) : "—"}</strong><small>{market ? market.date : "Loading market data"}</small></article>
               <article><span>Last session change</span><strong className={(dayChange ?? 0) >= 0 ? "positive" : "negative"}>{fmtPct(dayChange)}</strong><small>{prev ? "vs " + prev.date : ""}</small></article>
               <article><span>Model</span><strong>{prediction?.model || "Random Forest"}</strong><small>Next-period regression</small></article>
               <article><span>Your predictions</span><strong>{history.length}</strong><small>Stored and scored</small></article>
@@ -121,16 +162,33 @@ export default function Dashboard({ user, onSignOut }) {
               <div className="panel-head">
                 <div>
                   <p className="eyebrow">PRICE HISTORY</p>
-                  <h2>{symbol} · daily bars</h2>
+                  <h2>{symbolMeta[symbol]?.name || symbol} · {symbol} · daily candles{exchangeOf(symbol) === "NSE" ? " · NSE · IST" : ""}</h2>
                 </div>
                 <div className="symbol-pills">
-                  {symbols.map((s) => (
+                  {hasNse && (
+                    <>
+                      <button className={"pill" + (exchange === "ALL" ? " active" : "")} onClick={() => setExchange("ALL")}>All</button>
+                      <button className={"pill" + (exchange === "US" ? " active" : "")} onClick={() => setExchange("US")}>US</button>
+                      <button className={"pill" + (exchange === "NSE" ? " active" : "")} onClick={() => setExchange("NSE")}>India · NSE</button>
+                      <span className="pill-sep" />
+                    </>
+                  )}
+                  {visibleSymbols.map((s) => (
                     <button key={s} className={"pill" + (s === symbol ? " active" : "")} onClick={() => setSymbol(s)}>{s}</button>
                   ))}
                 </div>
               </div>
-              <PriceChart bars={bars} />
-              <p className="chart-note">Source: {bars[0]?.source_provider === "csv-sample" ? "checked-in sample data" : dataSource || "Twelve Data"} · daily bars · may be delayed</p>
+              <div className="indicator-toggles">
+                {INDICATOR_TOGGLES.map(([key, label]) => (
+                  <button
+                    key={key}
+                    className={"chip" + (overlays[key] ? " active" : "")}
+                    onClick={() => setOverlays((o) => ({ ...o, [key]: !o[key] }))}
+                  >{label}</button>
+                ))}
+              </div>
+              <PriceChart bars={bars} indicators={indicators} overlays={overlays} currency={currency} />
+              <p className="chart-note">Source: {bars[0]?.source_provider === "csv-sample" ? "checked-in sample data" : (exchangeOf(symbol) === "NSE" ? "Yahoo Finance (NSE)" : "Twelve Data")} · daily bars · may be delayed · not investment advice</p>
             </section>
 
             <section className="workspace">
@@ -141,7 +199,7 @@ export default function Dashboard({ user, onSignOut }) {
                 <div className="prediction-box">
                   <div>
                     <span>Predicted close</span>
-                    <strong>{prediction ? "$" + prediction.predicted_close.toFixed(2) : "—"}</strong>
+                    <strong>{prediction ? fmtPrice(currency, prediction.predicted_close) : "—"}</strong>
                   </div>
                   <div>
                     <span>Expected change</span>
@@ -187,8 +245,8 @@ export default function Dashboard({ user, onSignOut }) {
               {history.map((item) => (
                 <div className="row" key={item.id}>
                   <span>{item.symbol} · {item.prediction_date}</span>
-                  <span>${item.predicted_close.toFixed(2)}</span>
-                  <span>{item.actual_close ? "$" + item.actual_close.toFixed(2) : "Pending"}</span>
+                  <span>{fmtPrice(symbolMeta[item.symbol]?.currency, item.predicted_close)}</span>
+                  <span>{item.actual_close ? fmtPrice(symbolMeta[item.symbol]?.currency, item.actual_close) : "Pending"}</span>
                   <span className={item.actual_close ? (item.percentage_error <= 2 ? "positive" : "negative") : ""}>
                     {item.actual_close ? "Error " + item.percentage_error.toFixed(2) + "%" : "Awaiting actual close"}
                   </span>
