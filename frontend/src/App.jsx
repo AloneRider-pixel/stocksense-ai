@@ -3,6 +3,8 @@ import { api, clearToken, setToken } from "./lib/api";
 import AuthScreen from "./components/AuthScreen";
 import Dashboard from "./components/Dashboard";
 
+const IS_DEMO = import.meta.env.VITE_DEMO === "true";
+
 export default function App() {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
@@ -104,8 +106,16 @@ export default function App() {
     }
   }
 
+  const demoBanner = IS_DEMO ? (
+    <div className="demo-banner">
+      Demo deployment running on checked-in sample data. Predictions are illustrative, not investment advice.
+    </div>
+  ) : null;
+
   if (!user) {
     return (
+      <>
+        {demoBanner}
       <AuthScreen
         mode={mode}
         email={email}
@@ -119,11 +129,14 @@ export default function App() {
         setFullName={setFullName}
         onSubmit={submitAuth}
       />
+      </>
     );
   }
 
   return (
-    <Dashboard
+    <>
+      {demoBanner}
+      <Dashboard
       user={user}
       symbol={symbol}
       setSymbol={setSymbol}
@@ -139,5 +152,6 @@ export default function App() {
         setUser(null);
       }}
     />
+    </>
   );
 }
