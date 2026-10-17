@@ -101,3 +101,18 @@ The generated models/metrics.json should only be committed when it was produced 
     curl http://localhost:8000/health/live
     curl http://localhost:8000/health/ready
     curl http://localhost:8000/docs
+
+## Demo deployment (sample data)
+
+A public demo can run without PostgreSQL, Redis, or a market-data key:
+
+- `DEMO_MODE=true` (ignored in production), `ENVIRONMENT=development`
+- `DATABASE_URL=sqlite:////data/stocksense.db`
+- `MARKET_DATA_PROVIDER=csv` (uses the checked-in `data/sample_prices.csv`)
+- `CORS_ORIGINS=<frontend origin>`, `JWT_SECRET=<random 32+ chars>`
+
+On startup the app seeds the DEMO symbol from the sample CSV, creates the
+demo account `demo@stocksense.app` / `Demo1234!`, and trains the sample model
+if no artifact exists. The frontend shows a sample-data banner when built
+with `VITE_DEMO=true`. Demo predictions are illustrative, not investment
+advice.

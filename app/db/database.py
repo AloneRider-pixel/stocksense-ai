@@ -7,10 +7,16 @@ from app.core.config import settings
 from app.db.models import Base
 
 
+_connect_args = (
+    {}
+    if settings.database_url.startswith("sqlite")
+    else {"connect_timeout": 2}
+)
+
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,
-    connect_args={"connect_timeout": 2},
+    connect_args=_connect_args,
 )
 
 SessionLocal = sessionmaker(
