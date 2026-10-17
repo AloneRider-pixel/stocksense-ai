@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     market_data_timeout_seconds: float = 10.0
     market_data_refresh_interval_minutes: int = 30
     market_data_symbols: str = "AAPL,MSFT,GOOGL,AMZN,NVDA"
+    nse_symbols: str = "RELIANCE,TCS,INFY,HDFCBANK,ICICIBANK,SBIN,ITC,LT,BHARTIARTL,ADANIENT"
     market_data_refresh_hour: int = 22
     market_data_refresh_minute: int = 30
 
@@ -58,6 +59,18 @@ class Settings(BaseSettings):
             for value in self.market_data_symbols.split(",")
             if value.strip()
         ]
+
+    @property
+    def nse_symbol_list(self) -> list[str]:
+        return [
+            value.strip().upper()
+            for value in self.nse_symbols.split(",")
+            if value.strip()
+        ]
+
+    @property
+    def all_symbol_list(self) -> list[str]:
+        return self.market_data_symbol_list + self.nse_symbol_list
 
 
 DEFAULT_DATABASE_URL = "postgresql+psycopg://stocksense:stocksense@localhost:5432/stocksense"

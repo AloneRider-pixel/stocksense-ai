@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 
@@ -69,6 +70,12 @@ def build_training_frame(df: pd.DataFrame) -> pd.DataFrame:
         frame["volatility5"] = frame["return_1d"].rolling(5).std()
         frame["volume_change5"] = frame["volume"].pct_change(5)
         frame["target"] = frame["close"].shift(-1) / frame["close"]
+
+    # Real-world feeds can contain zero-volume days; pct_change then yields
+    # infinities that would crash model fitting. Treat them as missing.
+    frame[FEATURE_COLUMNS + ["target"]] = frame[FEATURE_COLUMNS + ["target"]].replace(
+        [np.inf, -np.inf], np.nan
+    )
 
     return frame.dropna(
         subset=FEATURE_COLUMNS + ["target"]
