@@ -90,9 +90,13 @@ def stock_history(
     try:
         repository = MarketDataRepository(session)
         stored = repository.list_history(normalized, limit=limit)
+        last_ingested = stored[-1].ingested_at if stored else None
+        if last_ingested is not None and last_ingested.tzinfo is None:
+            # SQLite returns naive datetimes even for timezone-aware columns.
+            last_ingested = last_ingested.replace(tzinfo=timezone.utc)
         stale = (
             not stored
-            or stored[-1].ingested_at
+            or last_ingested
             < datetime.now(timezone.utc)
             - timedelta(minutes=settings.market_data_refresh_interval_minutes)
         )
