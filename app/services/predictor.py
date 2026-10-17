@@ -23,25 +23,46 @@ class Predictor:
     ) -> None:
         self.model_path = model_path
         self.registry_path = registry_path
-        self.model = None
-        self.model_version = None
+        self._models: dict[str, tuple[object, str]] = {}
 
-    def _ensure_loaded(self) -> None:
-        if self.model is not None:
-            return
+    def _model_for(self, symbol: str) -> tuple[object, str]:
+        """Resolve the model for a symbol.
 
-        if not self.model_path.exists():
-            if settings.environment != "development":
-                raise RuntimeError(
-                    "Model artifact is missing. Run the training pipeline before starting production."
+        Per-symbol live-trained artifacts (stocksense_rf_<SYMBOL>.joblib, written
+        by the demo seeder from ingested provider data) win over the global
+        sample model so predictions stay in the symbol's price range.
+        """
+        key = symbol.upper()
+        if key in self._models:
+            return self._models[key]
+
+        candidates: list[tuple[Path, str | None]] = []
+        if key:
+            candidates.append(
+                (
+                    self.model_path.with_name(f"stocksense_rf_{key}.joblib"),
+                    f"random-forest-live-{key.lower()}",
                 )
+            )
+        candidates.append((self.model_path, None))
 
-            from app.services.training import train_model
+        for path, version in candidates:
+            if path.exists():
+                resolved = (joblib.load(path), version or self._load_model_version())
+                self._models[key] = resolved
+                return resolved
 
-            train_model(model_path=str(self.model_path))
+        if settings.environment != "development":
+            raise RuntimeError(
+                "Model artifact is missing. Run the training pipeline before starting production."
+            )
 
-        self.model = joblib.load(self.model_path)
-        self.model_version = self._load_model_version()
+        from app.services.training import train_model
+
+        train_model(model_path=str(self.model_path))
+        resolved = (joblib.load(self.model_path), self._load_model_version())
+        self._models[key] = resolved
+        return resolved
 
     def _load_model_version(self) -> str:
         if not self.registry_path.exists():
@@ -58,10 +79,10 @@ class Predictor:
         symbol: str,
         history: list[dict[str, object]],
     ) -> dict[str, object]:
-        self._ensure_loaded()
+        model, model_version = self._model_for(symbol)
 
         features = np.array([build_prediction_features(history)])
-        predicted_close = float(self.model.predict(features)[0])
+        predicted_close = float(model.predict(features)[0])
         current_close = float(history[-1]["close"])
 
         return {
@@ -71,7 +92,7 @@ class Predictor:
                 ((predicted_close - current_close) / current_close) * 100,
                 4,
             ),
-            "model": self.model_version or "random-forest-unknown",
+            "model": model_version or "random-forest-unknown",
             "cached": False,
         }
 

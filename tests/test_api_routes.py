@@ -249,3 +249,39 @@ def test_rate_limit_returns_429_after_exhaustion(
     assert second.status_code == 429
     assert second.json()["error"]["code"] == "RATE_LIMIT_EXCEEDED"
     assert "retry-after" in {key.lower() for key in second.headers}
+
+
+@pytest.fixture()
+def fresh_overview_cache(monkeypatch):
+    monkeypatch.setattr(api_routes, "_overview_cache", {"payload": None, "expires": 0.0})
+
+
+def test_public_market_overview_returns_configured_symbols(
+    client, fresh_overview_cache, monkeypatch
+):
+    monkeypatch.setattr(settings, "market_data_provider", "csv")
+    monkeypatch.setattr(settings, "market_data_symbols", "DEMO")
+
+    response = client.get("/api/v1/public/market-overview")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["data_source"] == "Twelve Data daily bars"
+    assert "not investment advice" in payload["disclaimer"]
+    symbols = payload["symbols"]
+    assert len(symbols) == 1
+    assert symbols[0]["symbol"] == "DEMO"
+    assert symbols[0]["close"] > 0
+    assert symbols[0]["change_pct"] is not None
+
+
+def test_public_market_overview_tolerates_missing_data(
+    client, fresh_overview_cache, monkeypatch
+):
+    monkeypatch.setattr(settings, "market_data_provider", "csv")
+    monkeypatch.setattr(settings, "market_data_symbols", "UNKNOWN")
+
+    response = client.get("/api/v1/public/market-overview")
+
+    assert response.status_code == 200
+    assert response.json()["symbols"] == []

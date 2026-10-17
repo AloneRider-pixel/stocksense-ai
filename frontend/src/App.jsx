@@ -1,157 +1,127 @@
 import { useEffect, useState } from "react";
 import { api, clearToken, setToken } from "./lib/api";
+import { DEMO_EMAIL, DEMO_PASSWORD, IS_DEMO } from "./config";
+import Landing from "./components/Landing";
 import AuthScreen from "./components/AuthScreen";
 import Dashboard from "./components/Dashboard";
 
-const IS_DEMO = import.meta.env.VITE_DEMO === "true";
-
 export default function App() {
-  const [mode, setMode] = useState("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [symbol, setSymbol] = useState("DEMO");
+  const [view, setView] = useState("landing");
+  const [authMode, setAuthMode] = useState("login");
   const [user, setUser] = useState(null);
-  const [market, setMarket] = useState(null);
-  const [prediction, setPrediction] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [evaluation, setEvaluation] = useState(null);
-  const [error, setError] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [demoError, setDemoError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [booting, setBooting] = useState(true);
 
   useEffect(() => {
-    if (!localStorage.getItem("stocksense_token")) return;
-    api("/auth/me").then(setUser).catch(() => clearToken());
+    if (!localStorage.getItem("stocksense_token")) {
+      setBooting(false);
+      return;
+    }
+    api("/auth/me")
+      .then((me) => {
+        setUser(me);
+        setView("app");
+      })
+      .catch(() => clearToken())
+      .finally(() => setBooting(false));
   }, []);
 
-  useEffect(() => {
-    if (!user) return;
+  async function login(email, password) {
+    const result = await api("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    setToken(result.access_token);
+    const me = await api("/auth/me");
+    setUser(me);
+    setView("app");
+  }
 
-    api("/predictions?limit=10")
-      .then(setHistory)
-      .catch(() => setHistory([]));
-
-    api("/predictions/evaluation")
-      .then(setEvaluation)
-      .catch(() => setEvaluation(null));
-
-    api("/stocks/" + symbol + "/history?limit=1")
-      .then((result) => setMarket(result[0] || null))
-      .catch(() => setMarket(null));
-  }, [user, symbol]);
-
-  async function submitAuth(event) {
-    event.preventDefault();
+  async function submitAuth({ mode, email, password, fullName }) {
     setBusy(true);
-    setError("");
-
+    setAuthError("");
     try {
       if (mode === "register") {
         await api("/auth/register", {
           method: "POST",
-          body: JSON.stringify({
-            email,
-            password,
-            full_name: fullName || null,
-          }),
+          body: JSON.stringify({ email, password, full_name: fullName || null }),
         });
       }
-
-      const result = await api("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
-
-      setToken(result.access_token);
-      setUser(await api("/auth/me"));
+      await login(email, password);
     } catch (err) {
-      setError(err.message);
+      setAuthError(err.message);
     } finally {
       setBusy(false);
     }
   }
 
-  async function runPrediction() {
+  async function exploreDemo() {
     setBusy(true);
-    setError("");
-
+    setDemoError("");
+    setAuthError("");
     try {
-      const bars = await api("/stocks/" + symbol + "/history?limit=100");
-
-      if (bars.length < 11) {
-        throw new Error("Not enough market history is available for this symbol.");
-      }
-
-      setMarket(bars[bars.length - 1]);
-
-      const result = await api("/predict", {
-        method: "POST",
-        body: JSON.stringify({
-          symbol,
-          history: bars.map((bar) => ({
-            date: bar.date,
-            close: bar.close,
-            volume: bar.volume,
-          })),
-        }),
-      });
-
-      setPrediction(result);
-      setHistory(await api("/predictions?limit=10"));
-      setEvaluation(await api("/predictions/evaluation"));
+      await login(DEMO_EMAIL, DEMO_PASSWORD);
     } catch (err) {
-      setError(err.message);
+      setDemoError("Demo sign-in failed: " + err.message);
     } finally {
       setBusy(false);
     }
   }
 
-  const demoBanner = IS_DEMO ? (
-    <div className="demo-banner">
-      Demo deployment running on checked-in sample data. Predictions are illustrative, not investment advice.
-    </div>
-  ) : null;
+  function signOut() {
+    clearToken();
+    setUser(null);
+    setView("landing");
+  }
 
-  if (!user) {
+  if (booting) {
+    return <div className="boot-screen">Loading StockSense AI…</div>;
+  }
+
+  if (view === "app" && user) {
     return (
       <>
-        {demoBanner}
-      <AuthScreen
-        mode={mode}
-        email={email}
-        password={password}
-        fullName={fullName}
-        busy={busy}
-        error={error}
-        setMode={setMode}
-        setEmail={setEmail}
-        setPassword={setPassword}
-        setFullName={setFullName}
-        onSubmit={submitAuth}
-      />
+        {IS_DEMO && (
+          <div className="demo-banner">
+            Public demo on free-tier hosting. Market data: Twelve Data daily bars, may be
+            delayed. Predictions are illustrative, not investment advice.
+          </div>
+        )}
+        <Dashboard user={user} onSignOut={signOut} />
       </>
     );
   }
 
+  if (view === "auth") {
+    return (
+      <AuthScreen
+        initialMode={authMode}
+        busy={busy}
+        error={authError}
+        onSubmit={submitAuth}
+        onDemo={IS_DEMO ? exploreDemo : undefined}
+        onBack={() => setView("landing")}
+      />
+    );
+  }
+
   return (
-    <>
-      {demoBanner}
-      <Dashboard
-      user={user}
-      symbol={symbol}
-      setSymbol={setSymbol}
-      market={market}
-      prediction={prediction}
-      history={history}
-      evaluation={evaluation}
-      busy={busy}
-      error={error}
-      onPredict={runPrediction}
-      onSignOut={() => {
-        clearToken();
-        setUser(null);
+    <Landing
+      onSignIn={() => {
+        setAuthMode("login");
+        setAuthError("");
+        setView("auth");
       }}
+      onRegister={() => {
+        setAuthMode("register");
+        setAuthError("");
+        setView("auth");
+      }}
+      onDemo={exploreDemo}
+      demoBusy={busy}
+      demoError={demoError}
     />
-    </>
   );
 }

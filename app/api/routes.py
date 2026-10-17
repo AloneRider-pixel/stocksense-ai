@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.public_rate_limit import enforce_public_rate_limit
 from app.api.rate_limit_dependency import enforce_rate_limit
 from app.api.schemas import (
     PredictionHistoryItem,
@@ -31,6 +33,122 @@ cache = PredictionCache()
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "stocksense-ai"}
+
+
+_overview_cache: dict[str, object] = {"payload": None, "expires": 0.0}
+_OVERVIEW_CACHE_TTL_SECONDS = 600.0
+_OVERVIEW_EMPTY_CACHE_TTL_SECONDS = 60.0
+_OVERVIEW_INGEST_BUDGET = 8
+
+
+def _latest_bars(repository: MarketDataRepository, symbol: str) -> list:
+    return repository.list_history(symbol, limit=2)
+
+
+@router.get(
+    "/public/market-overview",
+    dependencies=[Depends(enforce_public_rate_limit)],
+)
+def public_market_overview() -> dict[str, object]:
+    """Landing-page snapshot: latest stored close for each configured symbol.
+
+    Unauthenticated and cached briefly in-process. When a symbol has no stored
+    bars (or they are stale), a small per-request budget of provider calls
+    backfills it; failures fall back to whatever is stored.
+    """
+    now = time.time()
+    cached = _overview_cache.get("payload")
+    if cached is not None and now < float(_overview_cache.get("expires", 0.0)):
+        return cached  # type: ignore[return-value]
+
+    session = get_session()
+    snapshots: list[dict[str, object]] = []
+    ingest_budget = _OVERVIEW_INGEST_BUDGET
+    try:
+        repository = MarketDataRepository(session)
+        provider = None
+        for symbol in settings.market_data_symbol_list:
+            stored = _latest_bars(repository, symbol)
+            last_ingested = stored[-1].ingested_at if stored else None
+            if last_ingested is not None and last_ingested.tzinfo is None:
+                # SQLite returns naive datetimes even for timezone-aware columns.
+                last_ingested = last_ingested.replace(tzinfo=timezone.utc)
+            stale = (
+                not stored
+                or last_ingested
+                < datetime.now(timezone.utc)
+                - timedelta(minutes=settings.market_data_refresh_interval_minutes)
+            )
+            if stale and ingest_budget > 0:
+                try:
+                    if provider is None:
+                        provider = get_market_data_provider()
+                    bars = provider.history(symbol, limit=2)
+                    if bars:
+                        repository.upsert_many(
+                            [
+                                {
+                                    "date": date.fromisoformat(bar.date),
+                                    "symbol": bar.symbol,
+                                    "open": bar.open,
+                                    "high": bar.high,
+                                    "low": bar.low,
+                                    "close": bar.close,
+                                    "volume": bar.volume,
+                                    "source_provider": getattr(
+                                        provider,
+                                        "name",
+                                        provider.__class__.__name__,
+                                    ),
+                                }
+                                for bar in bars
+                            ]
+                        )
+                        stored = _latest_bars(repository, symbol)
+                    ingest_budget -= 1
+                except (TwelveDataError, ValueError):
+                    # A broken provider should not fail every remaining symbol.
+                    ingest_budget = 0
+
+            if not stored:
+                continue
+            latest = stored[-1]
+            change_pct = None
+            if len(stored) >= 2 and stored[-2].close:
+                previous = float(stored[-2].close)
+                change_pct = round(
+                    ((float(latest.close) - previous) / previous) * 100,
+                    2,
+                )
+            snapshots.append(
+                {
+                    "symbol": latest.symbol,
+                    "date": latest.date.isoformat(),
+                    "close": float(latest.close),
+                    "change_pct": change_pct,
+                }
+            )
+    finally:
+        session.close()
+
+    payload = {
+        "symbols": snapshots,
+        "data_source": "Twelve Data daily bars",
+        "refreshed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "disclaimer": (
+            "Market data may be delayed. Predictions are illustrative and are "
+            "not investment advice."
+        ),
+    }
+    missing = len(settings.market_data_symbol_list) - len(snapshots)
+    ttl = (
+        _OVERVIEW_CACHE_TTL_SECONDS
+        if snapshots and missing == 0
+        else _OVERVIEW_EMPTY_CACHE_TTL_SECONDS
+    )
+    _overview_cache["payload"] = payload
+    _overview_cache["expires"] = now + ttl
+    return payload
 
 
 def _ingest_symbol(symbol: str, limit: int) -> dict[str, int | str]:
