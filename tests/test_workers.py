@@ -85,6 +85,7 @@ def test_refresh_configured_markets_aggregates(worker_env, monkeypatch):
         lambda: FakeProvider([make_bar("2025-01-02")]),
     )
     monkeypatch.setattr(settings, "market_data_symbols", "DEMO,OTHER")
+    monkeypatch.setattr(settings, "nse_symbols", "")
 
     result = asyncio.run(tasks.refresh_configured_markets({"job_try": 1}))
 

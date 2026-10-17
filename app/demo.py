@@ -20,8 +20,9 @@ from app.core.config import settings
 from app.db.database import get_session, init_db
 from app.db.repository import MarketDataRepository
 from app.market_data.csv_provider import CSVMarketDataProvider
-from app.market_data.factory import get_market_data_provider
+from app.market_data.factory import get_provider_for_symbol
 from app.market_data.twelve_data import TwelveDataError
+from app.market_data.yfinance_provider import YFinanceError
 from app.services.features import FEATURE_COLUMNS, build_training_frame
 from app.services.predictor import MODEL_PATH
 
@@ -77,10 +78,9 @@ def _ensure_sample_model() -> None:
 
 def _ingest_live_symbols(session) -> int:
     """Pull configured symbols from the live provider (skips fresh data)."""
-    provider = get_market_data_provider()
     repository = MarketDataRepository(session)
     ingested = 0
-    for symbol in settings.market_data_symbol_list:
+    for symbol in settings.all_symbol_list:
         stored = repository.list_history(symbol, limit=1)
         if stored:
             last_ingested = stored[-1].ingested_at
@@ -90,9 +90,10 @@ def _ingest_live_symbols(session) -> int:
                 timezone.utc
             ) - timedelta(minutes=settings.market_data_refresh_interval_minutes):
                 continue
+        provider = get_provider_for_symbol(symbol)
         try:
             bars = provider.history(symbol, limit=LIVE_MODEL_ROWS)
-        except (TwelveDataError, ValueError) as exc:
+        except (TwelveDataError, YFinanceError, ValueError) as exc:
             logger.warning("demo seed: live ingestion failed for %s: %s", symbol, exc)
             continue
         if bars:
@@ -124,7 +125,7 @@ def _train_live_symbol_models(session) -> int:
     """
     repository = MarketDataRepository(session)
     trained = 0
-    for symbol in settings.market_data_symbol_list:
+    for symbol in settings.all_symbol_list:
         model_path = MODELS_DIR / f"stocksense_rf_{symbol}.joblib"
         if model_path.exists():
             continue

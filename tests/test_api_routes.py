@@ -72,10 +72,10 @@ def test_stock_history_serves_stored_rows_without_provider(
     first = client.get("/api/v1/stocks/DEMO/history?limit=50", headers=headers)
     assert first.status_code == 200
 
-    def failing_provider():
+    def failing_provider(symbol):
         raise AssertionError("provider should not be called for fresh stored data")
 
-    monkeypatch.setattr(api_routes, "get_market_data_provider", failing_provider)
+    monkeypatch.setattr(api_routes, "get_provider_for_symbol", failing_provider)
     second = client.get("/api/v1/stocks/DEMO/history?limit=50", headers=headers)
 
     assert second.status_code == 200
@@ -261,12 +261,13 @@ def test_public_market_overview_returns_configured_symbols(
 ):
     monkeypatch.setattr(settings, "market_data_provider", "csv")
     monkeypatch.setattr(settings, "market_data_symbols", "DEMO")
+    monkeypatch.setattr(settings, "nse_symbols", "")
 
     response = client.get("/api/v1/public/market-overview")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["data_source"] == "Twelve Data daily bars"
+    assert "Twelve Data" in payload["data_source"] and "Yahoo Finance" in payload["data_source"]
     assert "not investment advice" in payload["disclaimer"]
     symbols = payload["symbols"]
     assert len(symbols) == 1
@@ -280,6 +281,7 @@ def test_public_market_overview_tolerates_missing_data(
 ):
     monkeypatch.setattr(settings, "market_data_provider", "csv")
     monkeypatch.setattr(settings, "market_data_symbols", "UNKNOWN")
+    monkeypatch.setattr(settings, "nse_symbols", "")
 
     response = client.get("/api/v1/public/market-overview")
 

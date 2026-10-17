@@ -65,6 +65,7 @@ def test_seed_demo_environment_skips_sample_data_with_live_provider(
     monkeypatch.setattr(settings, "market_data_provider", "twelve_data")
     # No API key configured: ingestion fails fast and is skipped.
     monkeypatch.setattr(settings, "twelve_data_api_key", "")
+    monkeypatch.setattr(settings, "nse_symbols", "")
 
     demo.seed_demo_environment()
 
@@ -110,11 +111,12 @@ def test_live_seed_ingests_and_trains_per_symbol_model(
             ]
 
     monkeypatch.setattr(demo, "_ensure_sample_model", lambda: None)
-    monkeypatch.setattr(demo, "get_market_data_provider", lambda: StubProvider())
+    monkeypatch.setattr(demo, "get_provider_for_symbol", lambda symbol: StubProvider())
     monkeypatch.setattr(demo, "MODELS_DIR", tmp_path)
     monkeypatch.setattr(settings, "environment", "development")
     monkeypatch.setattr(settings, "market_data_provider", "twelve_data")
     monkeypatch.setattr(settings, "market_data_symbols", "AAPL")
+    monkeypatch.setattr(settings, "nse_symbols", "")
 
     demo.seed_demo_environment()
 

@@ -19,7 +19,10 @@ from app.auth.dependencies import get_current_user
 from app.core.config import settings
 from app.db.database import get_session
 from app.db.repository import MarketDataRepository, PredictionRepository
-from app.market_data.factory import get_market_data_provider
+from app.market_data.factory import get_provider_for_symbol
+from app.market_data.symbols import describe_symbol
+from app.market_data.yfinance_provider import YFinanceError
+from app.services.indicators import compute_indicators
 from app.market_data.ingestion import MarketDataIngestionService
 from app.market_data.twelve_data import TwelveDataError
 from app.services.cache import PredictionCache
@@ -67,7 +70,7 @@ def public_market_overview() -> dict[str, object]:
     try:
         repository = MarketDataRepository(session)
         provider = None
-        for symbol in settings.market_data_symbol_list:
+        for symbol in settings.all_symbol_list:
             stored = _latest_bars(repository, symbol)
             last_ingested = stored[-1].ingested_at if stored else None
             if last_ingested is not None and last_ingested.tzinfo is None:
@@ -81,8 +84,7 @@ def public_market_overview() -> dict[str, object]:
             )
             if stale and ingest_budget > 0:
                 try:
-                    if provider is None:
-                        provider = get_market_data_provider()
+                    provider = get_provider_for_symbol(symbol)
                     bars = provider.history(symbol, limit=2)
                     if bars:
                         repository.upsert_many(
@@ -106,7 +108,7 @@ def public_market_overview() -> dict[str, object]:
                         )
                         stored = _latest_bars(repository, symbol)
                     ingest_budget -= 1
-                except (TwelveDataError, ValueError):
+                except (TwelveDataError, YFinanceError, ValueError):
                     # A broken provider should not fail every remaining symbol.
                     ingest_budget = 0
 
@@ -120,9 +122,14 @@ def public_market_overview() -> dict[str, object]:
                     ((float(latest.close) - previous) / previous) * 100,
                     2,
                 )
+            info = describe_symbol(latest.symbol)
             snapshots.append(
                 {
                     "symbol": latest.symbol,
+                    "name": info.name,
+                    "exchange": info.exchange,
+                    "currency": info.currency,
+                    "timezone": info.timezone,
                     "date": latest.date.isoformat(),
                     "close": float(latest.close),
                     "change_pct": change_pct,
@@ -133,14 +140,14 @@ def public_market_overview() -> dict[str, object]:
 
     payload = {
         "symbols": snapshots,
-        "data_source": "Twelve Data daily bars",
+        "data_source": "Twelve Data (US) and Yahoo Finance (NSE) daily bars",
         "refreshed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "disclaimer": (
             "Market data may be delayed. Predictions are illustrative and are "
             "not investment advice."
         ),
     }
-    missing = len(settings.market_data_symbol_list) - len(snapshots)
+    missing = len(settings.all_symbol_list) - len(snapshots)
     ttl = (
         _OVERVIEW_CACHE_TTL_SECONDS
         if snapshots and missing == 0
@@ -157,7 +164,7 @@ def _ingest_symbol(symbol: str, limit: int) -> dict[str, int | str]:
         repository = MarketDataRepository(session)
         prediction_repository = PredictionRepository(session)
         service = MarketDataIngestionService(
-            get_market_data_provider(),
+            get_provider_for_symbol(symbol),
             repository,
             prediction_repository,
         )
@@ -221,7 +228,7 @@ def stock_history(
 
         if len(stored) < limit or stale:
             try:
-                provider = get_market_data_provider()
+                provider = get_provider_for_symbol(normalized)
                 bars = provider.history(normalized, limit=limit)
                 if bars:
                     repository.upsert_many(
@@ -245,7 +252,7 @@ def stock_history(
                     )
                     PredictionRepository(session).evaluate_pending(normalized)
                     stored = repository.list_history(normalized, limit=limit)
-            except (TwelveDataError, ValueError) as exc:
+            except (TwelveDataError, YFinanceError, ValueError) as exc:
                 if not stored:
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
@@ -412,3 +419,72 @@ def prediction_evaluation(
         ) from exc
     finally:
         session.close()
+
+
+@router.get(
+    "/stocks/{symbol}/indicators",
+    dependencies=[Depends(enforce_rate_limit)],
+)
+def stock_indicators(
+    symbol: str,
+    limit: int = Query(default=150, ge=60, le=1500),
+) -> dict[str, object]:
+    """Computed indicator series (SMA/EMA/RSI/MACD/Bollinger) over stored bars.
+
+    Values are derived only from past and current bars (no lookahead). Leading
+    entries are null until each indicator has enough history.
+    """
+    normalized = symbol.strip().upper()
+    session = get_session()
+    try:
+        repository = MarketDataRepository(session)
+        stored = repository.list_history(normalized, limit=limit)
+        if len(stored) < 60:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "code": "INSUFFICIENT_HISTORY",
+                    "message": (
+                        f"Not enough stored bars for '{normalized}' to compute "
+                        "indicators (need at least 60)."
+                    ),
+                },
+            )
+        bars = [
+            {
+                "date": row.date.isoformat(),
+                "open": row.open,
+                "high": row.high,
+                "low": row.low,
+                "close": row.close,
+                "volume": row.volume,
+            }
+            for row in stored
+        ]
+    finally:
+        session.close()
+
+    info = describe_symbol(normalized)
+    payload = compute_indicators(bars)
+    payload["symbol"] = normalized
+    payload["exchange"] = info.exchange
+    payload["currency"] = info.currency
+    return payload
+
+
+@router.get(
+    "/symbols",
+    dependencies=[Depends(enforce_rate_limit)],
+)
+def list_symbols() -> list[dict[str, str]]:
+    """Configured symbol universe with exchange and currency metadata."""
+    return [
+        {
+            "symbol": info.symbol,
+            "name": info.name,
+            "exchange": info.exchange,
+            "currency": info.currency,
+            "timezone": info.timezone,
+        }
+        for info in (describe_symbol(s) for s in settings.all_symbol_list)
+    ]
