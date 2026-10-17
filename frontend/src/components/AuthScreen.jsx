@@ -1,18 +1,18 @@
+import { useState } from "react";
 import Brand from "./Brand";
+import { IS_DEMO } from "../config";
 
-export default function AuthScreen({
-  mode,
-  email,
-  password,
-  fullName,
-  busy,
-  error,
-  setMode,
-  setEmail,
-  setPassword,
-  setFullName,
-  onSubmit,
-}) {
+export default function AuthScreen({ initialMode, busy, error, onSubmit, onDemo, onBack }) {
+  const [mode, setMode] = useState(initialMode || "login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+
+  function submit(event) {
+    event.preventDefault();
+    onSubmit({ mode, email, password, fullName });
+  }
+
   return (
     <main className="auth-shell">
       <section className="auth-card">
@@ -20,11 +20,11 @@ export default function AuthScreen({
         <p className="eyebrow">MARKET INTELLIGENCE PLATFORM</p>
         <h1>
           {mode === "login"
-            ? "Market intelligence, built for decisions."
+            ? "Welcome back."
             : "Create your StockSense account."}
         </h1>
 
-        <form onSubmit={onSubmit}>
+        <form onSubmit={submit}>
           {mode === "register" && (
             <>
               <label>Full name</label>
@@ -53,7 +53,7 @@ export default function AuthScreen({
             required
           />
 
-          <button disabled={busy}>
+          <button className="btn-primary" disabled={busy}>
             {busy ? "Working..." : mode === "login" ? "Sign in" : "Create account"}
           </button>
         </form>
@@ -62,11 +62,19 @@ export default function AuthScreen({
 
         <button
           className="switch-auth"
-          onClick={() => {
-            setMode(mode === "login" ? "register" : "login");
-          }}
+          onClick={() => setMode(mode === "login" ? "register" : "login")}
         >
           {mode === "login" ? "Create an account" : "Back to sign in"}
+        </button>
+
+        {IS_DEMO && mode === "login" && (
+          <button className="switch-auth" onClick={onDemo} disabled={busy}>
+            Just looking? Explore the demo account
+          </button>
+        )}
+
+        <button className="switch-auth" onClick={onBack}>
+          Back to the home page
         </button>
       </section>
     </main>
