@@ -140,5 +140,7 @@ def test_live_seed_ingests_and_trains_per_symbol_model(
     ]
     result = predictor.predict(symbol="AAPL", history=history)
     assert result["model"] == "random-forest-live-aapl"
-    # In-range prediction: trained on the same price level as the request.
-    assert 100.0 < result["predicted_close"] < 250.0
+    # Ratio-target model: prediction stays within a plausible daily move of the
+    # last close (249.5 here), regardless of the absolute price level.
+    last_close = history[-1]["close"]
+    assert abs(result["predicted_close"] - last_close) / last_close < 0.05

@@ -82,8 +82,10 @@ class Predictor:
         model, model_version = self._model_for(symbol)
 
         features = np.array([build_prediction_features(history)])
-        predicted_close = float(model.predict(features)[0])
+        # The model predicts the next-period return ratio; convert to price.
+        predicted_ratio = float(model.predict(features)[0])
         current_close = float(history[-1]["close"])
+        predicted_close = current_close * predicted_ratio
 
         return {
             "symbol": symbol,

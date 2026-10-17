@@ -55,4 +55,4 @@ def test_training_frame_does_not_cross_contaminate_symbols() -> None:
     assert len(bbb) == 5
     assert bbb.loc[0, "return_1d"] == pytest.approx(1 / 1008)
     assert bbb.loc[0, "return_5d"] == pytest.approx(5 / 1004)
-    assert bbb.loc[0, "target"] == pytest.approx(1010.0)
+    assert bbb.loc[0, "target"] == pytest.approx(1010.0 / 1009.0)
