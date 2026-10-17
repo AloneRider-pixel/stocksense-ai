@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     allowed_hosts: str = "*"
 
     market_data_provider: str = "twelve_data"
+    demo_mode: bool = False
+    demo_user_email: str = "demo@stocksense.app"
+    demo_user_password: str = "Demo1234!"
     twelve_data_api_key: str = ""
     twelve_data_base_url: str = "https://api.twelvedata.com"
     market_data_max_rows: int = 5000
