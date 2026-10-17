@@ -38,6 +38,11 @@ export default function Dashboard({ user, onSignOut }) {
   const [exchange, setExchange] = useState("ALL");
   const [indicators, setIndicators] = useState(null);
   const [overlays, setOverlays] = useState({ sma20: true, sma50: false, ema: false, bollinger: false, rsi: false, macd: false });
+  const [watchlist, setWatchlist] = useState([]);
+  const [screenerRows, setScreenerRows] = useState(null);
+  const [screenerMeta, setScreenerMeta] = useState(null);
+  const [filters, setFilters] = useState({ exchange: "", min_change_pct: "", max_change_pct: "", min_rsi: "", max_rsi: "", above_sma20: "", min_volume: "" });
+  const [screenerBusy, setScreenerBusy] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [dataSource, setDataSource] = useState("");
@@ -50,18 +55,22 @@ export default function Dashboard({ user, onSignOut }) {
           setSymbols(list);
           setSymbol((cur) => (list.includes(cur) ? cur : list[0]));
           setDataSource(ov.data_source || "");
-          const meta = {};
-          ov.symbols.forEach((s) => { meta[s.symbol] = s; });
-          setSymbolMeta((prev) => ({ ...prev, ...meta }));
+          setSymbolMeta((prev) => {
+            const next = { ...prev };
+            ov.symbols.forEach((s) => { next[s.symbol] = { ...next[s.symbol], ...s }; });
+            return next;
+          });
         }
       })
       .catch(() => {});
     api("/symbols")
       .then((list) => {
         if (Array.isArray(list)) {
-          const meta = {};
-          list.forEach((s) => { meta[s.symbol] = s; });
-          setSymbolMeta((prev) => ({ ...prev, ...meta }));
+          setSymbolMeta((prev) => {
+            const next = { ...prev };
+            list.forEach((s) => { next[s.symbol] = { ...next[s.symbol], ...s }; });
+            return next;
+          });
         }
       })
       .catch(() => {});
@@ -80,6 +89,7 @@ export default function Dashboard({ user, onSignOut }) {
   }, [symbol]);
 
   useEffect(() => {
+    api("/watchlist").then((w) => setWatchlist(w.symbols || [])).catch(() => {});
     api("/predictions?limit=20").then(setHistory).catch(() => setHistory([]));
     api("/predictions/evaluation").then(setEvaluation).catch(() => setEvaluation(null));
     api("/metrics").then((m) => {
@@ -118,6 +128,39 @@ export default function Dashboard({ user, onSignOut }) {
     }
   }
 
+  async function toggleWatch(sym) {
+    try {
+      if (watchlist.includes(sym)) {
+        const r = await api("/watchlist/" + sym, { method: "DELETE" });
+        setWatchlist(r.symbols || []);
+      } else {
+        const r = await api("/watchlist", { method: "POST", body: JSON.stringify({ symbol: sym }) });
+        setWatchlist(r.symbols || []);
+      }
+    } catch (e) { setError(e.message); }
+  }
+
+  async function runScreener() {
+    setScreenerBusy(true);
+    try {
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([k, v]) => { if (v !== "" && v != null) params.set(k, v); });
+      const r = await api("/screener" + (params.toString() ? "?" + params.toString() : ""));
+      setScreenerRows(r.results || []);
+      setScreenerMeta({ scanned: r.scanned, universe: r.universe });
+    } catch (e) {
+      setError(e.message);
+      setScreenerRows([]);
+    } finally {
+      setScreenerBusy(false);
+    }
+  }
+
+  function openSymbol(sym) {
+    setSymbol(sym);
+    setTab("overview");
+  }
+
   const firstName = user.full_name || user.email.split("@")[0];
   const currency = symbolMeta[symbol]?.currency || "USD";
   const exchangeOf = (s) => symbolMeta[s]?.exchange || "US";
@@ -130,6 +173,8 @@ export default function Dashboard({ user, onSignOut }) {
         <Brand />
         <nav>
           <a className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>Overview</a>
+          <a className={tab === "watchlist" ? "active" : ""} onClick={() => setTab("watchlist")}>Watchlist</a>
+          <a className={tab === "screener" ? "active" : ""} onClick={() => setTab("screener")}>Screener</a>
           <a className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>Prediction activity</a>
           <a className={tab === "evaluation" ? "active" : ""} onClick={() => setTab("evaluation")}>Model evaluation</a>
         </nav>
@@ -162,7 +207,11 @@ export default function Dashboard({ user, onSignOut }) {
               <div className="panel-head">
                 <div>
                   <p className="eyebrow">PRICE HISTORY</p>
-                  <h2>{symbolMeta[symbol]?.name || symbol} · {symbol} · daily candles{exchangeOf(symbol) === "NSE" ? " · NSE · IST" : ""}</h2>
+                  <h2>{symbolMeta[symbol]?.name || symbol} · {symbol} · daily candles{exchangeOf(symbol) === "NSE" ? " · NSE · IST" : ""}
+                    <button className={"star" + (watchlist.includes(symbol) ? " active" : "")} title={watchlist.includes(symbol) ? "Remove from watchlist" : "Add to watchlist"} onClick={() => toggleWatch(symbol)}>
+                      {watchlist.includes(symbol) ? "★" : "☆"}
+                    </button>
+                  </h2>
                 </div>
                 <div className="symbol-pills">
                   {hasNse && (
@@ -231,6 +280,73 @@ export default function Dashboard({ user, onSignOut }) {
               </article>
             </section>
           </>
+        )}
+
+        {tab === "watchlist" && (
+          <section className="panel">
+            <p className="eyebrow">WATCHLIST</p>
+            <h2>Symbols you follow</h2>
+            <div className="table table-head watchlist-head">
+              <span>Symbol</span><span>Market</span><span>Last close</span><span></span>
+            </div>
+            <div className="table">
+              {watchlist.length === 0 && <div className="empty">Nothing saved yet. Use the ☆ next to a symbol on the Overview chart.</div>}
+              {watchlist.map((sym) => (
+                <div className="row" key={sym}>
+                  <span><button className="linklike" onClick={() => openSymbol(sym)}>{symbolMeta[sym]?.name || sym} · {sym}</button></span>
+                  <span>{symbolMeta[sym]?.exchange === "NSE" ? "NSE · IST" : "US"}</span>
+                  <span>{symbolMeta[sym]?.close != null ? fmtPrice(symbolMeta[sym]?.currency, symbolMeta[sym].close) : "—"}</span>
+                  <span><button className="chip" onClick={() => toggleWatch(sym)}>Remove</button></span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {tab === "screener" && (
+          <section className="panel">
+            <p className="eyebrow">SCREENER</p>
+            <h2>Scan the universe</h2>
+            <p className="muted small-print">Metrics computed from stored daily bars (may be delayed). {screenerMeta ? screenerMeta.scanned + " of " + screenerMeta.universe + " symbols scanned." : ""}</p>
+            <div className="screener-filters">
+              <label>Market
+                <select value={filters.exchange} onChange={(e) => setFilters({ ...filters, exchange: e.target.value })}>
+                  <option value="">All</option>
+                  <option value="US">US</option>
+                  <option value="NSE">India · NSE</option>
+                </select>
+              </label>
+              <label>Change % min<input type="number" step="0.1" value={filters.min_change_pct} onChange={(e) => setFilters({ ...filters, min_change_pct: e.target.value })} /></label>
+              <label>Change % max<input type="number" step="0.1" value={filters.max_change_pct} onChange={(e) => setFilters({ ...filters, max_change_pct: e.target.value })} /></label>
+              <label>RSI min<input type="number" min="0" max="100" value={filters.min_rsi} onChange={(e) => setFilters({ ...filters, min_rsi: e.target.value })} /></label>
+              <label>RSI max<input type="number" min="0" max="100" value={filters.max_rsi} onChange={(e) => setFilters({ ...filters, max_rsi: e.target.value })} /></label>
+              <label>Price vs SMA20
+                <select value={filters.above_sma20} onChange={(e) => setFilters({ ...filters, above_sma20: e.target.value })}>
+                  <option value="">Any</option>
+                  <option value="true">Above</option>
+                  <option value="false">Below</option>
+                </select>
+              </label>
+              <button className="btn-primary" onClick={runScreener} disabled={screenerBusy}>{screenerBusy ? "Scanning..." : "Run screen"}</button>
+            </div>
+            <div className="table table-head screener-head screener-grid">
+              <span>Symbol</span><span>Close</span><span>Change</span><span>RSI 14</span><span>SMA 20</span><span>Rel vol</span>
+            </div>
+            <div className="table screener-grid">
+              {screenerRows === null && <div className="empty">Set filters and run the screen.</div>}
+              {screenerRows !== null && screenerRows.length === 0 && <div className="empty">No symbols match.</div>}
+              {(screenerRows || []).map((r) => (
+                <div className="row" key={r.symbol}>
+                  <span><button className="linklike" onClick={() => openSymbol(r.symbol)}>{r.name} · {r.symbol}</button></span>
+                  <span>{fmtPrice(r.currency, r.close)}</span>
+                  <span className={(r.change_pct ?? 0) >= 0 ? "positive" : "negative"}>{fmtPct(r.change_pct)}</span>
+                  <span>{r.rsi14 ?? "—"}</span>
+                  <span>{r.above_sma20 == null ? "—" : r.above_sma20 ? "Above" : "Below"}</span>
+                  <span>{r.rel_volume ?? "—"}</span>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
         {tab === "activity" && (
