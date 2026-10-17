@@ -15,7 +15,7 @@ Features are calculated only from observations available at the prediction times
 - 5-day return volatility
 - 5-day volume change
 
-The target is the next observed close.
+The target is the next-period return ratio (next close / close); metrics are computed in price space by converting predictions back with the current close, so they stay comparable to the last-close baseline.
 
 ## Walk-forward protocol
 

@@ -68,8 +68,10 @@ def walk_forward_evaluate(
 
         for row_index, (_, row) in enumerate(test.iterrows()):
             previous_close = float(row["close"])
-            actual_close = float(row["target"])
-            predicted_close = float(predictions[row_index])
+            # Target and model output are return ratios; metrics are computed
+            # in price space by converting back with the current close.
+            actual_close = previous_close * float(row["target"])
+            predicted_close = previous_close * float(predictions[row_index])
             actual_move = np.sign(actual_close - previous_close)
             predicted_move = np.sign(predicted_close - previous_close)
 

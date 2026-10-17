@@ -56,7 +56,7 @@ def train_model(
     metrics_path: str = "models/metrics.json",
     registry_path: str = "models/registry.json",
     predictions_path: str = "models/walk_forward_predictions.csv",
-    model_version: str = "random-forest-v0.3",
+    model_version: str = "random-forest-v0.4",
     symbol: str | None = None,
     provider_name: str | None = None,
     limit: int = 1000,

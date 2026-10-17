@@ -57,7 +57,9 @@ def build_training_frame(df: pd.DataFrame) -> pd.DataFrame:
         frame["volume_change5"] = (
             frame.groupby("symbol", sort=False)["volume"].pct_change(5)
         )
-        frame["target"] = grouped.shift(-1)
+        # Target is the next-period return ratio (next close / close), so the
+        # model learns relative moves and stays valid across price levels.
+        frame["target"] = grouped.shift(-1) / frame["close"]
         frame = frame.sort_values(["date", "symbol"])
     else:
         frame["return_1d"] = frame["close"].pct_change()
@@ -66,7 +68,7 @@ def build_training_frame(df: pd.DataFrame) -> pd.DataFrame:
         frame["sma10_ratio"] = frame["close"] / frame["close"].rolling(10).mean()
         frame["volatility5"] = frame["return_1d"].rolling(5).std()
         frame["volume_change5"] = frame["volume"].pct_change(5)
-        frame["target"] = frame["close"].shift(-1)
+        frame["target"] = frame["close"].shift(-1) / frame["close"]
 
     return frame.dropna(
         subset=FEATURE_COLUMNS + ["target"]
