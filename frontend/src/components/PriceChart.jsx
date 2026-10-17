@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 
 const W = 860;
-const PAD = { top: 18, right: 16, bottom: 22, left: 56 };
+const PAD = { top: 18, right: 16, bottom: 22, left: 74 };
 const VOL_H = 40;
 const PRICE_H = 240;
 const SUB_H = 90;
@@ -108,10 +108,14 @@ export default function PriceChart({ bars, indicators, overlays, currency }) {
         {[0, 0.5, 1].map((f) => {
           const price = geom.max - f * (geom.max - geom.min);
           const y = geom.y(price);
+          const locale = currency === "INR" ? "en-IN" : "en-US";
+          const label = price >= 1000
+            ? Math.round(price).toLocaleString(locale)
+            : price.toFixed(2);
           return (
             <g key={f}>
               <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} stroke="#1a2840" strokeWidth="1" />
-              <text x={PAD.left - 10} y={y + 4} textAnchor="end" className="axis-label">{price.toFixed(2)}</text>
+              <text x={PAD.left - 8} y={y + 4} textAnchor="end" className="axis-label">{label}</text>
             </g>
           );
         })}
