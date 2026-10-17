@@ -23,7 +23,12 @@ from app.services.cache import PredictionCache
 async def lifespan(_: FastAPI):
     if settings.environment.strip().casefold() != "production":
         try:
-            init_db()
+            if settings.demo_mode:
+                from app.demo import seed_demo_environment
+
+                seed_demo_environment()
+            else:
+                init_db()
         except Exception:
             pass
 
