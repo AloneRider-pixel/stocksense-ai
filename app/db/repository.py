@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import MarketBarRecord, PredictionRecord, User
+from app.db.models import MarketBarRecord, PredictionRecord, User, WatchlistItem
 
 
 class UserRepository:
@@ -248,3 +248,45 @@ class PredictionRepository:
                 6,
             ) if directions else None,
         }
+
+
+class WatchlistRepository:
+    def __init__(self, session) -> None:
+        self.session = session
+
+    def list_symbols(self, user_id: int) -> list[str]:
+        rows = (
+            self.session.query(WatchlistItem)
+            .filter(WatchlistItem.user_id == user_id)
+            .order_by(WatchlistItem.created_at.asc())
+            .all()
+        )
+        return [row.symbol for row in rows]
+
+    def add(self, user_id: int, symbol: str) -> bool:
+        """Insert the symbol; returns False when it was already present."""
+        existing = (
+            self.session.query(WatchlistItem)
+            .filter(
+                WatchlistItem.user_id == user_id,
+                WatchlistItem.symbol == symbol,
+            )
+            .first()
+        )
+        if existing is not None:
+            return False
+        self.session.add(WatchlistItem(user_id=user_id, symbol=symbol))
+        self.session.commit()
+        return True
+
+    def remove(self, user_id: int, symbol: str) -> bool:
+        deleted = (
+            self.session.query(WatchlistItem)
+            .filter(
+                WatchlistItem.user_id == user_id,
+                WatchlistItem.symbol == symbol,
+            )
+            .delete()
+        )
+        self.session.commit()
+        return deleted > 0

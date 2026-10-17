@@ -18,11 +18,12 @@ from app.api.schemas import (
 from app.auth.dependencies import get_current_user
 from app.core.config import settings
 from app.db.database import get_session
-from app.db.repository import MarketDataRepository, PredictionRepository
+from app.db.repository import MarketDataRepository, PredictionRepository, WatchlistRepository
 from app.market_data.factory import get_provider_for_symbol
 from app.market_data.symbols import describe_symbol
 from app.market_data.yfinance_provider import YFinanceError
 from app.services.indicators import compute_indicators
+from app.services.screener import screen_universe
 from app.market_data.ingestion import MarketDataIngestionService
 from app.market_data.twelve_data import TwelveDataError
 from app.services.cache import PredictionCache
@@ -488,3 +489,143 @@ def list_symbols() -> list[dict[str, str]]:
         }
         for info in (describe_symbol(s) for s in settings.all_symbol_list)
     ]
+
+
+@router.get(
+    "/watchlist",
+    dependencies=[Depends(enforce_rate_limit)],
+)
+def get_watchlist(current_user=Depends(get_current_user)) -> dict[str, object]:
+    session = get_session()
+    try:
+        symbols = WatchlistRepository(session).list_symbols(current_user.id)
+    finally:
+        session.close()
+    return {"symbols": symbols}
+
+
+@router.post(
+    "/watchlist",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_rate_limit)],
+)
+def add_to_watchlist(
+    payload: dict[str, str],
+    current_user=Depends(get_current_user),
+) -> dict[str, object]:
+    symbol = str(payload.get("symbol", "")).strip().upper()
+    if not symbol:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "WATCHLIST_INPUT_ERROR", "message": "Symbol is required."},
+        )
+    if symbol not in settings.all_symbol_list:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "SYMBOL_NOT_SUPPORTED",
+                "message": (
+                    f"'{symbol}' is not in the configured universe. "
+                    "Watchlists track symbols the platform has real data for."
+                ),
+            },
+        )
+    session = get_session()
+    try:
+        created = WatchlistRepository(session).add(current_user.id, symbol)
+        symbols = WatchlistRepository(session).list_symbols(current_user.id)
+    finally:
+        session.close()
+    return {"added": created, "symbols": symbols}
+
+
+@router.delete(
+    "/watchlist/{symbol}",
+    dependencies=[Depends(enforce_rate_limit)],
+)
+def remove_from_watchlist(
+    symbol: str,
+    current_user=Depends(get_current_user),
+) -> dict[str, object]:
+    session = get_session()
+    try:
+        removed = WatchlistRepository(session).remove(current_user.id, symbol.strip().upper())
+        symbols = WatchlistRepository(session).list_symbols(current_user.id)
+    finally:
+        session.close()
+    if not removed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "WATCHLIST_ITEM_NOT_FOUND",
+                "message": f"'{symbol.strip().upper()}' is not on the watchlist.",
+            },
+        )
+    return {"removed": True, "symbols": symbols}
+
+
+_screener_cache: dict[str, object] = {"payload": None, "key": None, "expires": 0.0}
+_SCREENER_CACHE_TTL_SECONDS = 60.0
+
+
+@router.get(
+    "/screener",
+    dependencies=[Depends(enforce_rate_limit)],
+)
+def screener(
+    exchange: str | None = Query(default=None),
+    min_change_pct: float | None = Query(default=None),
+    max_change_pct: float | None = Query(default=None),
+    min_rsi: float | None = Query(default=None, ge=0, le=100),
+    max_rsi: float | None = Query(default=None, ge=0, le=100),
+    above_sma20: bool | None = Query(default=None),
+    min_volume: int | None = Query(default=None, ge=0),
+    current_user=Depends(get_current_user),
+) -> dict[str, object]:
+    """Scan the configured universe on real computed metrics from stored bars."""
+    cache_key = (exchange, min_change_pct, max_change_pct, min_rsi, max_rsi, above_sma20, min_volume)
+    now = time.time()
+    if (
+        _screener_cache.get("payload") is not None
+        and _screener_cache.get("key") == cache_key
+        and now < float(_screener_cache.get("expires", 0.0))
+    ):
+        return _screener_cache["payload"]  # type: ignore[return-value]
+
+    session = get_session()
+    try:
+        repository = MarketDataRepository(session)
+        histories = {
+            symbol: [
+                {
+                    "date": row.date.isoformat(),
+                    "close": row.close,
+                    "volume": row.volume,
+                }
+                for row in repository.list_history(symbol, limit=120)
+            ]
+            for symbol in settings.all_symbol_list
+        }
+    finally:
+        session.close()
+
+    results = screen_universe(
+        histories,
+        exchange=exchange,
+        min_change_pct=min_change_pct,
+        max_change_pct=max_change_pct,
+        min_rsi=min_rsi,
+        max_rsi=max_rsi,
+        above_sma20=above_sma20,
+        min_volume=min_volume,
+    )
+    payload = {
+        "results": results,
+        "scanned": sum(1 for bars in histories.values() if len(bars) >= 21),
+        "universe": len(settings.all_symbol_list),
+        "disclaimer": "Metrics are computed from stored daily bars, which may be delayed.",
+    }
+    _screener_cache["payload"] = payload
+    _screener_cache["key"] = cache_key
+    _screener_cache["expires"] = now + _SCREENER_CACHE_TTL_SECONDS
+    return payload
