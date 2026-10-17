@@ -6,6 +6,20 @@
 
 Market-intelligence application for stock analysis, chronological prediction evaluation, monitoring, and a React dashboard.
 
+
+## Live demo
+
+Try the deployed app: [stocksense-ai-demo.onrender.com](https://stocksense-ai-demo.onrender.com)
+
+| | |
+|---|---|
+| Email | `demo@stocksense.app` |
+| Password | `Demo1234!` |
+
+![StockSense AI dashboard](docs/screenshots/dashboard.png)
+
+The demo runs on free-tier hosting with `DEMO_MODE=true`: it serves the checked-in sample dataset (`data/sample_prices.csv`) instead of live market feeds, and the banner says so on every screen. First load can take up to a minute while the free instance wakes up. Predictions are illustrative, not investment advice.
+
 ## What it demonstrates
 
 - JWT-authenticated accounts with user-scoped prediction history.
