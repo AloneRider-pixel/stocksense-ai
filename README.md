@@ -12,6 +12,8 @@ Built solo by [Himanshu Bisht](https://github.com/AloneRider-pixel) to demonstra
 
 **Stack:** FastAPI · PostgreSQL · Redis · scikit-learn · React/Vite · Docker · GitHub Actions
 
+**API:** [interactive docs (Swagger)](https://stocksense-ai-zvo7.onrender.com/docs) · [endpoint guide with real examples](docs/api.md)
+
 ## Try it in 2 minutes
 
 1. Open the [live demo](https://stocksense-ai-demo.onrender.com). First load can take up to a minute on free-tier hosting.
