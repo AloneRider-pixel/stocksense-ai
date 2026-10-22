@@ -23,7 +23,10 @@ export default function PredActualChart({ items, currency }) {
     return <div className="empty">Predicted-vs-actual lines appear once at least two predictions have been scored.</div>;
   }
 
-  const values = scored.flatMap((i) => [i.predicted_close, i.actual_close]);
+  const hasBaseline = scored.some((i) => i.baseline_close != null);
+  const values = scored.flatMap((i) =>
+    [i.predicted_close, i.actual_close, i.baseline_close].filter((v) => v != null)
+  );
   let min = Math.min(...values);
   let max = Math.max(...values);
   const pad = (max - min || 1) * 0.08;
@@ -37,6 +40,9 @@ export default function PredActualChart({ items, currency }) {
 
   const predicted = path(scored.map((p, i) => [x(i), y(p.predicted_close)]));
   const actual = path(scored.map((p, i) => [x(i), y(p.actual_close)]));
+  const baseline = hasBaseline
+    ? path(scored.map((p, i) => (p.baseline_close == null ? null : [x(i), y(p.baseline_close)])))
+    : null;
   const ticks = [min, (min + max) / 2, max];
   const sym = currency === "INR" ? "₹" : "$";
 
@@ -51,6 +57,9 @@ export default function PredActualChart({ items, currency }) {
             </text>
           </g>
         ))}
+        {baseline && (
+          <path d={baseline} fill="none" stroke="#8a97ab" strokeWidth="1.4" strokeDasharray="5 4" />
+        )}
         <path d={predicted} fill="none" stroke="#5b9dff" strokeWidth="2" />
         <path d={actual} fill="none" stroke="#4ade9d" strokeWidth="1.6" />
         <text x={PAD.left} y={H - 6} fill="#7590b0" fontSize="11">{scored[0].prediction_date}</text>
@@ -59,6 +68,9 @@ export default function PredActualChart({ items, currency }) {
       <div className="equity-legend">
         <span><i className="legend-dot" style={{ background: "#5b9dff" }} />Predicted close</span>
         <span><i className="legend-dot" style={{ background: "#4ade9d" }} />Actual close</span>
+        {baseline && (
+          <span><i className="legend-dot" style={{ background: "#8a97ab" }} />Naive baseline (previous close)</span>
+        )}
       </div>
     </div>
   );

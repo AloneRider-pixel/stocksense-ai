@@ -413,6 +413,9 @@ export default function Dashboard({ user, onSignOut }) {
               <article><span>Evaluated predictions</span><strong>{evaluation?.evaluated_predictions ?? 0}</strong><small>With realized actuals</small></article>
               <article><span>Directional accuracy</span><strong>{evaluation?.directional_accuracy_pct != null ? evaluation.directional_accuracy_pct.toFixed(1) + "%" : "—"}</strong><small>Online, your record</small></article>
               <article><span>Online MAE</span><strong>{evaluation?.mae != null ? Number(evaluation.mae).toFixed(3) : "—"}</strong><small>Realized error</small></article>
+              <article><span>Baseline MAE</span><strong>{evaluation?.baseline_mae != null ? Number(evaluation.baseline_mae).toFixed(3) : "—"}</strong><small>Last-close persistence</small></article>
+              <article><span>Baseline hit rate</span><strong>{evaluation?.baseline_directional_accuracy_pct != null ? evaluation.baseline_directional_accuracy_pct.toFixed(1) + "%" : "—"}</strong><small>Always-up baseline</small></article>
+              <article><span>Vs persistence baseline</span><strong className={evaluation?.improvement_vs_persistence_pct != null ? (Number(evaluation.improvement_vs_persistence_pct) >= 0 ? "positive" : "negative") : ""}>{evaluation?.improvement_vs_persistence_pct != null ? fmtPct(evaluation.improvement_vs_persistence_pct) : "—"}</strong><small>Positive means the model wins</small></article>
               {offlineMetrics && offlineMetrics.mae != null && (
                 <article><span>Offline MAE</span><strong>{Number(offlineMetrics.mae).toFixed(3)}</strong><small>Walk-forward, sample dataset</small></article>
               )}
@@ -425,9 +428,9 @@ export default function Dashboard({ user, onSignOut }) {
             </section>
             <section className="panel">
               <p className="eyebrow">PREDICTED VS ACTUAL</p>
-              <h2>Every scored prediction, on one chart.</h2>
+              <h2>Every scored prediction vs the naive baseline.</h2>
               <PredActualChart items={history} currency={currency} />
-              <p className="muted small-print">Only predictions with a realized close are drawn; pending ones are excluded, not hidden.</p>
+              <p className="muted small-print">Only predictions with a realized close are drawn; pending ones are excluded, not hidden. The dashed line is last-close persistence - the model must beat it to add value. This chart reads the stored record on every load, so it updates as new closes land.</p>
             </section>
             {publicAccuracy && publicAccuracy.symbols?.length > 0 && (
               <section className="panel">

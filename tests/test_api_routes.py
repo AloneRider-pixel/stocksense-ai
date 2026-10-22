@@ -471,3 +471,102 @@ def test_backtest_route_returns_strategy_vs_buy_hold(
     assert metrics["strategy_max_drawdown_pct"] <= 0
     first = payload["equity_curve"][0]
     assert set(first) == {"date", "strategy", "buy_hold"}
+
+
+def test_prediction_evaluation_includes_persistence_baseline(
+    client, auth_headers, session_factory
+):
+    from datetime import date
+
+    from app.db.repository import MarketDataRepository, PredictionRepository
+
+    headers, user = auth_headers
+    session = session_factory()
+    market = MarketDataRepository(session)
+    market.upsert_many(
+        [
+            {
+                "date": date(2026, 1, 2),
+                "symbol": "DEMO",
+                "open": 100,
+                "high": 102,
+                "low": 99,
+                "close": 100,
+                "volume": 1000000,
+                "source_provider": "test",
+            },
+            {
+                "date": date(2026, 1, 5),
+                "symbol": "DEMO",
+                "open": 100,
+                "high": 104,
+                "low": 99,
+                "close": 103,
+                "volume": 1200000,
+                "source_provider": "test",
+            },
+        ]
+    )
+    predictions = PredictionRepository(session)
+    predictions.add(
+        user_id=user.id,
+        symbol="DEMO",
+        prediction_date=date(2026, 1, 2),
+        predicted_close=102,
+        expected_change_pct=2,
+        model="test-model",
+        cached=False,
+    )
+    assert predictions.evaluate_pending("DEMO") == 1
+    session.close()
+
+    response = client.get("/api/v1/predictions/evaluation", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["evaluated_predictions"] == 1
+    # Model predicted 102 vs actual 103 -> MAE 1; baseline was 100 -> MAE 3.
+    assert payload["mae"] == 1
+    assert payload["baseline_mae"] == 3
+    # Baseline always-up: actual 103 >= 100 -> 100% baseline hit rate.
+    assert payload["baseline_directional_accuracy_pct"] == 100
+    assert payload["improvement_vs_persistence_pct"] == round((3 - 1) / 3 * 100, 4)
+
+
+def test_prediction_history_includes_baseline_close(
+    client, auth_headers, session_factory, stub_predictor, fake_cache
+):
+    from datetime import date
+
+    from app.db.repository import MarketDataRepository
+
+    headers, _ = auth_headers
+    session = session_factory()
+    MarketDataRepository(session).upsert_many(
+        [
+            {
+                "date": date(2026, 1, 2),
+                "symbol": "DEMO",
+                "open": 100,
+                "high": 102,
+                "low": 99,
+                "close": 100,
+                "volume": 1000000,
+                "source_provider": "test",
+            }
+        ]
+    )
+    session.close()
+
+    client.post(
+        "/api/v1/predict",
+        headers=headers,
+        json={"symbol": "DEMO", "history": history_payload()},
+    )
+
+    response = client.get("/api/v1/predictions", headers=headers)
+
+    assert response.status_code == 200
+    records = response.json()
+    assert len(records) == 1
+    assert "baseline_close" in records[0]
