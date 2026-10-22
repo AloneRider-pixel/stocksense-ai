@@ -86,7 +86,7 @@ export default function App() {
         {IS_DEMO && (
           <div className="demo-banner">
             Public demo on free-tier hosting. Market data: Twelve Data (US) and Yahoo Finance (NSE) daily bars, may be
-            delayed. Predictions are illustrative, not investment advice.
+            delayed. Research and engineering project. Not investment advice. Not a SEBI-registered research analyst or investment adviser. Past model performance does not indicate future results. Do not trade on this.
           </div>
         )}
         <Dashboard user={user} onSignOut={signOut} />

@@ -370,6 +370,21 @@ class PredictionRepository:
                 {
                     "symbol": sym,
                     "evaluated_predictions": len(rows),
+                    "realized_return_avg_pct": (
+                        round(
+                            sum(
+                                (float(r.actual_close) - baseline_closes[(r.symbol, r.prediction_date)])
+                                / baseline_closes[(r.symbol, r.prediction_date)]
+                                * 100
+                                for r in rows
+                                if (r.symbol, r.prediction_date) in baseline_closes and r.actual_close
+                            )
+                            / len(base_pairs),
+                            4,
+                        )
+                        if base_pairs
+                        else None
+                    ),
                     "first_prediction_date": min(
                         r.prediction_date for r in rows
                     ).isoformat(),
@@ -408,6 +423,73 @@ class PredictionRepository:
             )
         return summaries
 
+
+    def scored_records(self, symbol: str | None = None) -> list[PredictionRecord]:
+        """All predictions already reconciled against a realized close."""
+        stmt = select(PredictionRecord).where(
+            PredictionRecord.actual_close.is_not(None)
+        )
+        if symbol:
+            stmt = stmt.where(PredictionRecord.symbol == symbol.upper())
+        return list(self.session.scalars(stmt).all())
+
+    def index_benchmark_for(
+        self,
+        records: list[PredictionRecord],
+        index_symbol: str,
+    ) -> dict[str, object]:
+        """Compare scored prediction windows against an index (e.g. NIFTY 50).
+
+        For each evaluated prediction, computes the index's realized return
+        over the same window (prediction_date close to actual_date close) and
+        the underlying symbol's realized return, then reports how the tracked
+        windows did versus the index. Descriptive only: it says nothing about
+        what any future return will be.
+        """
+        index_closes: dict[date, float] = {}
+
+        def index_close(day: date) -> float | None:
+            if day not in index_closes:
+                close = self.session.scalar(
+                    select(MarketBarRecord.close).where(
+                        MarketBarRecord.symbol == index_symbol,
+                        MarketBarRecord.date == day,
+                    )
+                )
+                index_closes[day] = float(close) if close is not None else None  # type: ignore[assignment]
+            return index_closes[day]
+
+        baseline_closes = self.baseline_closes_for(records)
+        symbol_returns: list[float] = []
+        index_returns: list[float] = []
+        outperform = 0
+        for rec in records:
+            base = baseline_closes.get((rec.symbol, rec.prediction_date))
+            if not base or rec.actual_close is None or rec.actual_date is None:
+                continue
+            idx_start = index_close(rec.prediction_date)
+            idx_end = index_close(rec.actual_date)
+            if idx_start is None or idx_end is None:
+                continue
+            symbol_returns.append((float(rec.actual_close) - base) / base * 100)
+            index_returns.append((idx_end - idx_start) / idx_start * 100)
+            if symbol_returns[-1] > index_returns[-1]:
+                outperform += 1
+
+        compared = len(symbol_returns)
+        return {
+            "symbol": index_symbol,
+            "compared_windows": compared,
+            "avg_symbol_return_pct": (
+                round(sum(symbol_returns) / compared, 4) if compared else None
+            ),
+            "avg_index_return_pct": (
+                round(sum(index_returns) / compared, 4) if compared else None
+            ),
+            "share_outperforming_index_pct": (
+                round(outperform / compared * 100, 4) if compared else None
+            ),
+        }
 
     def latest_per_symbol(self) -> list[PredictionRecord]:
         """Most recent stored prediction per symbol, newest first."""

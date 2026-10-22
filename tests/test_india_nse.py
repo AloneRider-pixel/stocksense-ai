@@ -160,7 +160,9 @@ def test_symbols_endpoint(client, auth_headers):
     assert response.status_code == 200
     payload = response.json()
     by_symbol = {item["symbol"]: item for item in payload}
-    assert by_symbol["AAPL"]["exchange"] == "US"
+    assert by_symbol["RELIANCE"]["exchange"] == "NSE"
+    assert by_symbol["GOLD"]["asset_class"] == "metal"
+    assert by_symbol["USDINR"]["asset_class"] == "currency"
     assert by_symbol["RELIANCE"]["exchange"] == "NSE"
     assert by_symbol["RELIANCE"]["currency"] == "INR"
 

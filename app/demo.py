@@ -80,7 +80,7 @@ def _ingest_live_symbols(session) -> int:
     """Pull configured symbols from the live provider (skips fresh data)."""
     repository = MarketDataRepository(session)
     ingested = 0
-    for symbol in settings.all_symbol_list:
+    for symbol in settings.all_symbol_list[: settings.demo_seed_max_symbols]:
         stored = repository.list_history(symbol, limit=1)
         if stored:
             last_ingested = stored[-1].ingested_at
@@ -125,7 +125,7 @@ def _train_live_symbol_models(session) -> int:
     """
     repository = MarketDataRepository(session)
     trained = 0
-    for symbol in settings.all_symbol_list:
+    for symbol in settings.all_symbol_list[: settings.demo_seed_max_symbols]:
         model_path = MODELS_DIR / f"stocksense_rf_{symbol}.joblib"
         if model_path.exists():
             continue
