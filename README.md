@@ -4,8 +4,13 @@
 [![CodeQL](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/codeql.yml/badge.svg)](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Market-intelligence application for stock analysis, chronological prediction evaluation, monitoring, and a React dashboard.
+**Live demo:** [stocksense-ai-demo.onrender.com](https://stocksense-ai-demo.onrender.com) (one-click demo sign-in, no account setup)
 
+StockSense AI makes next-day close predictions for NSE and US stocks, stores every prediction, and scores each one against the real close when it lands.
+The point is not the model; it is the evaluation discipline: measured accuracy is always reported next to naive baselines, and nothing is deleted or restated.
+Built solo by [Himanshu Bisht](https://github.com/AloneRider-pixel) to demonstrate a production-shaped FastAPI + React system with honest, chronological model evaluation.
+
+**Stack:** FastAPI · PostgreSQL · Redis · scikit-learn · React/Vite · Docker · GitHub Actions
 
 ## Live demo
 
@@ -18,7 +23,14 @@ Try the deployed app: [stocksense-ai-demo.onrender.com](https://stocksense-ai-de
 
 ![StockSense AI dashboard](docs/screenshots/dashboard.png)
 
-The demo runs on free-tier hosting with `DEMO_MODE=true`: it serves the checked-in sample dataset (`data/sample_prices.csv`) instead of live market feeds, and the banner says so on every screen. First load can take up to a minute while the free instance wakes up. Predictions are illustrative, not investment advice.
+The demo serves real daily market data (Twelve Data for US symbols, Yahoo Finance for NSE; bars may be delayed). The live track record builds as stored predictions are reconciled against real closes. Predictions are illustrative, not investment advice.
+
+## Honest limits
+
+- **Free-tier hosting:** the demo sleeps when idle; first load can take up to a minute while the instance wakes.
+- **Demo, not production:** the deployed instance handles demo traffic only; nothing here is load-tested for production use.
+- **Backtest assumptions disclosed:** walk-forward out-of-sample, long/flat, no transaction costs, no shorting, no leverage. Past performance does not guarantee future results.
+- **Track record starts empty:** a fresh deployment has no scored predictions yet; the accuracy cards fill in as real closes arrive. That is the honest state, not a bug.
 
 ## What it demonstrates
 
