@@ -8,6 +8,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.api.routes import router
 from app.auth.routes import router as auth_router
 from app.core.config import settings
+from app.core.logging_config import configure_logging
 from app.core.errors import (
     http_exception_handler,
     unhandled_exception_handler,
@@ -17,6 +18,9 @@ from app.db.database import engine, init_db
 from app.http.middleware import RequestContextMiddleware
 from app.observability import MetricsMiddleware, prometheus_response
 from app.services.cache import PredictionCache
+
+
+configure_logging(settings.log_level, settings.log_format)
 
 
 @asynccontextmanager
