@@ -48,17 +48,25 @@ jobs:
           color = "brightgreen" if pct >= 85 else "yellow" if pct >= 70 else "red"
           json.dump({"schemaVersion": 1, "label": "coverage",
                      "message": f"{pct}%", "color": color},
-                    open("badge-endpoint.json", "w"))
+                    open("/tmp/badge-endpoint.json", "w"))
           PYEOF
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin badges || true
           git checkout -B badges origin/badges 2>/dev/null || git checkout --orphan badges
-          git rm -rf . 2>/dev/null || true
-          mv -f badge-endpoint.json coverage.json
-          git add coverage.json
-          git commit -m "coverage badge: $(date -u +%Y-%m-%dT%H:%M:%SZ)" || echo "no change"
-          git push origin badges
+          # Concurrent main runs can race this push (non-fast-forward), so
+          # retry on top of the latest badges tip instead of failing the run.
+          for attempt in 1 2 3; do
+            git rm -rf . 2>/dev/null || true
+            cp -f /tmp/badge-endpoint.json coverage.json
+            git add coverage.json
+            git commit -m "coverage badge: $(date -u +%Y-%m-%dT%H:%M:%SZ)" || echo "no change"
+            if git push origin badges; then
+              break
+            fi
+            git fetch origin badges
+            git reset --hard origin/badges
+          done
 
   frontend:
     runs-on: ubuntu-latest
