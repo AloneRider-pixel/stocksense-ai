@@ -28,6 +28,8 @@ The demo runs on free-tier hosting with `DEMO_MODE=true`: it serves the checked-
 - Prediction generation and prediction-vs-actual reconciliation.
 - Redis caching/rate limiting, PostgreSQL persistence, and background workers.
 - Reproducible sample-data evaluation and evidence verification.
+- Public accuracy endpoint and landing-page track record comparing live tracked predictions against last-close persistence and always-up naive baselines.
+- Walk-forward backtest view: long/flat model strategy vs buy-and-hold equity curve with max drawdown, assumptions disclosed.
 
 ## Architecture
 

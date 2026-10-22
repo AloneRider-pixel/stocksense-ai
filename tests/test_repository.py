@@ -81,3 +81,81 @@ def test_pending_prediction_is_evaluated_from_next_market_bar() -> None:
     assert evaluated.actual_close == 103
     assert evaluated.absolute_error == 1
     assert evaluated.direction_correct is True
+
+
+def test_public_accuracy_compares_against_persistence_baseline() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        market = MarketDataRepository(session)
+        market.upsert_many(
+            [
+                {
+                    "date": date(2026, 1, 2),
+                    "symbol": "DEMO",
+                    "open": 100,
+                    "high": 102,
+                    "low": 99,
+                    "close": 100,
+                    "volume": 1000000,
+                    "source_provider": "test",
+                },
+                {
+                    "date": date(2026, 1, 5),
+                    "symbol": "DEMO",
+                    "open": 100,
+                    "high": 104,
+                    "low": 99,
+                    "close": 103,
+                    "volume": 1200000,
+                    "source_provider": "test",
+                },
+            ]
+        )
+        predictions = PredictionRepository(session)
+        predictions.add(
+            user_id=None,
+            symbol="DEMO",
+            prediction_date=date(2026, 1, 2),
+            predicted_close=104,
+            expected_change_pct=4,
+            model="test-model",
+            cached=False,
+        )
+        assert predictions.evaluate_pending("DEMO") == 1
+
+        summaries = predictions.public_accuracy()
+
+    assert len(summaries) == 1
+    row = summaries[0]
+    assert row["symbol"] == "DEMO"
+    assert row["evaluated_predictions"] == 1
+    assert row["first_prediction_date"] == "2026-01-02"
+    assert row["last_prediction_date"] == "2026-01-02"
+    assert row["mae"] == 1
+    assert row["mape_pct"] == round(1 / 103 * 100, 4)
+    assert row["directional_accuracy_pct"] == 100
+    # Persistence baseline: close on the prediction date (100) vs actual (103).
+    assert row["baseline_mae"] == 3
+    assert row["baseline_mape_pct"] == round(3 / 103 * 100, 4)
+    assert row["improvement_vs_persistence_pct"] == round(2 / 3 * 100, 4)
+
+
+def test_public_accuracy_ignores_unevaluated_predictions() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        predictions = PredictionRepository(session)
+        predictions.add(
+            user_id=None,
+            symbol="DEMO",
+            prediction_date=date(2026, 1, 2),
+            predicted_close=104,
+            expected_change_pct=4,
+            model="test-model",
+            cached=False,
+        )
+
+        assert predictions.public_accuracy() == []

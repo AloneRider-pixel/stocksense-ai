@@ -287,3 +287,187 @@ def test_public_market_overview_tolerates_missing_data(
 
     assert response.status_code == 200
     assert response.json()["symbols"] == []
+
+
+@pytest.fixture()
+def fresh_accuracy_cache(monkeypatch):
+    monkeypatch.setattr(
+        api_routes,
+        "_accuracy_cache",
+        {"payload": None, "key": None, "expires": 0.0},
+    )
+
+
+def test_public_accuracy_reports_reconciled_predictions(
+    client, fresh_accuracy_cache, session_factory
+):
+    from datetime import date
+
+    from app.db.repository import MarketDataRepository, PredictionRepository
+
+    session = session_factory()
+    market = MarketDataRepository(session)
+    market.upsert_many(
+        [
+            {
+                "date": date(2026, 1, 2),
+                "symbol": "DEMO",
+                "open": 100,
+                "high": 102,
+                "low": 99,
+                "close": 100,
+                "volume": 1000000,
+                "source_provider": "test",
+            },
+            {
+                "date": date(2026, 1, 5),
+                "symbol": "DEMO",
+                "open": 100,
+                "high": 104,
+                "low": 99,
+                "close": 103,
+                "volume": 1200000,
+                "source_provider": "test",
+            },
+        ]
+    )
+    predictions = PredictionRepository(session)
+    predictions.add(
+        user_id=None,
+        symbol="DEMO",
+        prediction_date=date(2026, 1, 2),
+        predicted_close=104,
+        expected_change_pct=4,
+        model="test-model",
+        cached=False,
+    )
+    assert predictions.evaluate_pending("DEMO") == 1
+    session.close()
+
+    response = client.get("/api/v1/public/accuracy")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert "persistence" in payload["methodology"]
+    assert "not investment advice" in payload["disclaimer"]
+    assert payload["overall"]["evaluated_predictions"] == 1
+    assert payload["overall"]["mae"] == 1
+    assert payload["overall"]["baseline_mae"] == 3
+    assert payload["symbols"][0]["symbol"] == "DEMO"
+    assert payload["symbols"][0]["directional_accuracy_pct"] == 100
+
+
+def test_public_accuracy_empty_state_is_explicit(
+    client, fresh_accuracy_cache
+):
+    response = client.get("/api/v1/public/accuracy")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "insufficient_data"
+    assert payload["overall"]["evaluated_predictions"] == 0
+    assert payload["symbols"] == []
+
+
+@pytest.fixture()
+def fresh_latest_cache(monkeypatch):
+    monkeypatch.setattr(
+        api_routes,
+        "_latest_predictions_cache",
+        {"payload": None, "expires": 0.0},
+    )
+
+
+def test_public_latest_predictions_returns_most_recent_per_symbol(
+    client, fresh_latest_cache, session_factory
+):
+    from datetime import date
+
+    from app.db.repository import PredictionRepository
+
+    session = session_factory()
+    predictions = PredictionRepository(session)
+    predictions.add(
+        user_id=None,
+        symbol="DEMO",
+        prediction_date=date(2026, 1, 2),
+        predicted_close=104,
+        expected_change_pct=4,
+        model="test-model",
+        cached=False,
+    )
+    predictions.add(
+        user_id=None,
+        symbol="DEMO",
+        prediction_date=date(2026, 1, 3),
+        predicted_close=105,
+        expected_change_pct=1,
+        model="test-model",
+        cached=False,
+    )
+    session.close()
+
+    response = client.get("/api/v1/public/predictions/latest")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "not investment advice" in payload["disclaimer"]
+    assert len(payload["predictions"]) == 1
+    latest = payload["predictions"][0]
+    assert latest["symbol"] == "DEMO"
+    assert latest["prediction_date"] == "2026-01-03"
+    assert latest["predicted_close"] == 105
+
+
+def test_backtest_route_requires_enough_history(client, auth_headers):
+    headers, _ = auth_headers
+    response = client.get("/api/v1/backtest/DEMO", headers=headers)
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "INSUFFICIENT_HISTORY"
+
+
+def test_backtest_route_returns_strategy_vs_buy_hold(
+    client, auth_headers, session_factory
+):
+    import random
+    from datetime import date, timedelta
+
+    from app.db.repository import MarketDataRepository
+
+    session = session_factory()
+    market = MarketDataRepository(session)
+    rng = random.Random(7)
+    close = 100.0
+    bars = []
+    day = date(2025, 1, 6)
+    for i in range(160):
+        close += rng.uniform(-1.5, 1.8)
+        bars.append(
+            {
+                "date": day,
+                "symbol": "DEMO",
+                "open": close - 0.5,
+                "high": close + 1,
+                "low": close - 1,
+                "close": close,
+                "volume": 1_000_000 + i,
+                "source_provider": "test",
+            }
+        )
+        day += timedelta(days=1)
+    market.upsert_many(bars)
+    session.close()
+
+    headers, _ = auth_headers
+    response = client.get("/api/v1/backtest/DEMO", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["symbol"] == "DEMO"
+    assert "not investment advice" in payload["disclaimer"]
+    metrics = payload["metrics"]
+    assert metrics["periods"] == len(payload["equity_curve"]) > 0
+    assert metrics["strategy_max_drawdown_pct"] <= 0
+    first = payload["equity_curve"][0]
+    assert set(first) == {"date", "strategy", "buy_hold"}
