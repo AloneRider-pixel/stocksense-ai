@@ -268,7 +268,8 @@ def test_public_market_overview_returns_configured_symbols(
     assert response.status_code == 200
     payload = response.json()
     assert "Twelve Data" in payload["data_source"] and "Yahoo Finance" in payload["data_source"]
-    assert "not investment advice" in payload["disclaimer"]
+    assert "Not investment advice" in payload["disclaimer"]
+    assert "SEBI" in payload["disclaimer"]
     symbols = payload["symbols"]
     assert len(symbols) == 1
     assert symbols[0]["symbol"] == "DEMO"
@@ -350,7 +351,9 @@ def test_public_accuracy_reports_reconciled_predictions(
     payload = response.json()
     assert payload["status"] == "ok"
     assert "persistence" in payload["methodology"]
-    assert "not investment advice" in payload["disclaimer"]
+    assert "Not investment advice" in payload["disclaimer"]
+    assert "SEBI" in payload["disclaimer"]
+    assert "benchmark_index" in payload
     assert payload["overall"]["evaluated_predictions"] == 1
     assert payload["overall"]["mae"] == 1
     assert payload["overall"]["baseline_mae"] == 3
@@ -412,7 +415,8 @@ def test_public_latest_predictions_returns_most_recent_per_symbol(
 
     assert response.status_code == 200
     payload = response.json()
-    assert "not investment advice" in payload["disclaimer"]
+    assert "Not investment advice" in payload["disclaimer"]
+    assert "SEBI" in payload["disclaimer"]
     assert len(payload["predictions"]) == 1
     latest = payload["predictions"][0]
     assert latest["symbol"] == "DEMO"
@@ -465,7 +469,8 @@ def test_backtest_route_returns_strategy_vs_buy_hold(
     assert response.status_code == 200
     payload = response.json()
     assert payload["symbol"] == "DEMO"
-    assert "not investment advice" in payload["disclaimer"]
+    assert "Not investment advice" in payload["disclaimer"]
+    assert "SEBI" in payload["disclaimer"]
     metrics = payload["metrics"]
     assert metrics["periods"] == len(payload["equity_curve"]) > 0
     assert metrics["strategy_max_drawdown_pct"] <= 0

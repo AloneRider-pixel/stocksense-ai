@@ -63,7 +63,8 @@ curl https://stocksense-ai-zvo7.onrender.com/api/v1/public/accuracy
  "overall": {"evaluated_predictions": 0, "mae": null, "directional_accuracy_pct": null,
              "baseline_mae": null, "improvement_vs_persistence_pct": null, ...},
  "symbols": [],
- "methodology": "Every prediction served by the API is stored when it is made and reconciled against the next available market close. Only reconciled predictions are counted. The baseline is last-close persistence..."}
+ "benchmark_index": {"symbol": "NIFTY50", "compared_windows": 0, "avg_symbol_return_pct": null, "avg_index_return_pct": null, "share_outperforming_index_pct": null},
+    "methodology": "Every forecast served by the API is stored when it is made and reconciled against the next available NSE close. Baselines: last-close persistence and the NIFTY 50 index over the same windows..."}
 ```
 
 A fresh deployment honestly returns `insufficient_data` until real closes arrive to score against. The model must beat last-close persistence to claim value.

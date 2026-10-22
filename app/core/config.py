@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     allowed_hosts: str = "*"
 
     market_data_provider: str = "twelve_data"
+    benchmark_index_symbol: str = "NIFTY50"
+    demo_seed_max_symbols: int = 20
     demo_mode: bool = False
     demo_user_email: str = "demo@stocksense.app"
     demo_user_password: str = "Demo1234!"
@@ -30,8 +32,8 @@ class Settings(BaseSettings):
     market_data_max_rows: int = 5000
     market_data_timeout_seconds: float = 10.0
     market_data_refresh_interval_minutes: int = 30
-    market_data_symbols: str = "AAPL,MSFT,GOOGL,AMZN,NVDA"
-    nse_symbols: str = "RELIANCE,TCS,INFY,HDFCBANK,ICICIBANK,SBIN,ITC,LT,BHARTIARTL,ADANIENT"
+    market_data_symbols: str = "GOLD,SILVER,USDINR,EURINR,GBPINR,ADANIENT,ADANIPORTS,APOLLOHOSP,ASIANPAINT,AXISBANK,BAJAJ-AUTO,BAJAJFINSV,BAJFINANCE,BEL,BHARTIARTL,CIPLA,COALINDIA,DRREDDY,EICHERMOT,ETERNAL,GRASIM,HCLTECH,HDFCBANK,HDFCLIFE,HEROMOTOCO,HINDALCO,HINDUNILVR,ICICIBANK,INDUSINDBK,INFY,ITC,JIOFIN,JSWSTEEL,KOTAKBANK,LT,M&M,MARUTI,NESTLEIND,NTPC,ONGC,POWERGRID,RELIANCE,SBILIFE,SBIN,SHRIRAMFIN,SUNPHARMA,TATACONSUM,TATAMOTORS,TATASTEEL,TCS,TECHM,TITAN,TRENT,ULTRACEMCO,WIPRO"
+    nse_symbols: str = ""
     market_data_refresh_hour: int = 22
     market_data_refresh_minute: int = 30
 

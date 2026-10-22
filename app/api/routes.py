@@ -144,9 +144,10 @@ def public_market_overview() -> dict[str, object]:
         "data_source": "Twelve Data (US) and Yahoo Finance (NSE) daily bars",
         "refreshed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "disclaimer": (
-            "Market data may be delayed. Predictions are illustrative and are "
-            "not investment advice."
-        ),
+"Research and engineering project. Not investment advice. Not a "
+            "SEBI-registered research analyst or investment adviser. Past "
+            "model performance does not indicate future results. Do not "
+            "trade on this. Market data may be delayed."),
     }
     missing = len(settings.all_symbol_list) - len(snapshots)
     ttl = (
@@ -188,7 +189,12 @@ def public_accuracy(
 
     session = get_session()
     try:
-        summaries = PredictionRepository(session).public_accuracy(symbol=key)
+        repo = PredictionRepository(session)
+        summaries = repo.public_accuracy(symbol=key)
+        benchmark = repo.index_benchmark_for(
+            repo.scored_records(symbol=key),
+            settings.benchmark_index_symbol,
+        )
     finally:
         session.close()
 
@@ -226,16 +232,20 @@ def public_accuracy(
         "status": "ok" if total else "insufficient_data",
         "overall": overall,
         "symbols": summaries,
+        "benchmark_index": benchmark,
         "methodology": (
-            "Every prediction served by the API is stored when it is made and "
-            "reconciled against the next available market close. Only "
-            "reconciled predictions are counted. The baseline is last-close "
-            "persistence (predicting no change); a model must beat it to add "
-            "value. This is a live track record, not a backtest."
+            "Every forecast served by the API is stored when it is made and "
+            "reconciled against the next available NSE close (Asia/Kolkata, "
+            "trading days only). Only reconciled forecasts are counted. "
+            "Baselines: last-close persistence (forecasting no change) and "
+            "the NIFTY 50 index realized return over the same windows. This "
+            "is a live evaluation record, not a backtest."
         ),
         "disclaimer": (
-            "Predictions are illustrative and are not investment advice. "
-            "Past forecast error does not guarantee future performance."
+            "Research and engineering project. Not investment advice. Not a "
+            "SEBI-registered research analyst or investment adviser. Past "
+            "model performance does not indicate future results. Do not "
+            "trade on this."
         ),
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
@@ -284,8 +294,10 @@ def public_latest_predictions() -> dict[str, object]:
             for record in latest
         ],
         "disclaimer": (
-            "Predictions are illustrative and are not investment advice."
-        ),
+"Research and engineering project. Not investment advice. Not a "
+            "SEBI-registered research analyst or investment adviser. Past "
+            "model performance does not indicate future results. Do not "
+            "trade on this. Market data may be delayed."),
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     _latest_predictions_cache["payload"] = payload
@@ -362,8 +374,10 @@ def backtest_symbol(
             "shorting, no leverage. Daily bars may be delayed."
         ),
         "disclaimer": (
-            "Backtest results are illustrative and are not investment "
-            "advice. Past performance does not guarantee future results."
+            "Backtest over historical bars only. Research and engineering "
+            "project. Not investment advice. Not a SEBI-registered research "
+            "analyst or investment adviser. Past model performance does not "
+            "indicate future results. Do not trade on this."
         ),
     }
 
@@ -702,6 +716,7 @@ def list_symbols() -> list[dict[str, str]]:
             "exchange": info.exchange,
             "currency": info.currency,
             "timezone": info.timezone,
+            "asset_class": info.asset_class,
         }
         for info in (describe_symbol(s) for s in settings.all_symbol_list)
     ]

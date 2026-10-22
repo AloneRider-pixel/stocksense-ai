@@ -7,9 +7,11 @@
 
 **Live demo:** [stocksense-ai-demo.onrender.com](https://stocksense-ai-demo.onrender.com) (one-click demo sign-in, no account setup)
 
-StockSense AI makes next-day close predictions for NSE and US stocks, stores every prediction, and scores each one against the real close when it lands.
-The point is not the model; it is the evaluation discipline: measured accuracy is always reported next to naive baselines, and nothing is deleted or restated.
+StockSense AI is an India-first model-evaluation sandbox: it makes next-trading-day close forecasts for the NIFTY 50 universe (NSE equities), precious metals (spot gold and silver), and INR currency pairs (USD/INR, EUR/INR, GBP/INR), stores every forecast, and scores each one against the real close when it lands.
+The point is not the model; it is the evaluation discipline: measured error is always reported next to naive baselines (last-close persistence) and the NIFTY 50 index over the same windows, and nothing is deleted or restated.
 Built solo by [Himanshu Bisht](https://github.com/AloneRider-pixel) to demonstrate a production-shaped FastAPI + React system with honest, chronological model evaluation.
+
+**Research and engineering project. Not investment advice. Not a SEBI-registered research analyst or investment adviser. Past model performance does not indicate future results. Do not trade on this.**
 
 **Stack:** FastAPI · PostgreSQL · Redis · scikit-learn · React/Vite · Docker · GitHub Actions
 
@@ -19,7 +21,7 @@ Built solo by [Himanshu Bisht](https://github.com/AloneRider-pixel) to demonstra
 
 1. Open the [live demo](https://stocksense-ai-demo.onrender.com). First load can take up to a minute on free-tier hosting.
 2. Click **Live dashboard** - one click signs you into the shared demo account.
-3. Pick a symbol pill (NSE or US) and press **Run prediction**, or open **Backtest** to see the model strategy vs buy-and-hold on real stored bars.
+3. Pick an instrument pill (NIFTY 50 stock, gold, silver, or an INR pair) and press **Run prediction**, or open **Backtest** to see the model strategy vs buy-and-hold on real stored bars.
 4. Check the landing-page track record: every prediction is stored and scored against the real close, next to naive baselines.
 
 ## Live demo
@@ -33,7 +35,7 @@ Try the deployed app: [stocksense-ai-demo.onrender.com](https://stocksense-ai-de
 
 ![StockSense AI dashboard](docs/screenshots/dashboard.png)
 
-The demo serves real daily market data (Twelve Data for US symbols, Yahoo Finance for NSE; bars may be delayed). The live track record builds as stored predictions are reconciled against real closes. Predictions are illustrative, not investment advice.
+The demo serves real daily market data (Yahoo Finance for NSE equities, the NIFTY 50 index, metals, and FX; Twelve Data for optional US symbols; bars may be delayed). Metals are USD spot indications, not MCX futures. FX rates are indicative interbank levels, not executable prices. The live track record builds as stored forecasts are reconciled against real closes.
 
 ## Honest limits
 
@@ -50,7 +52,8 @@ The demo serves real daily market data (Twelve Data for US symbols, Yahoo Financ
 - Prediction generation and prediction-vs-actual reconciliation.
 - Redis caching/rate limiting, PostgreSQL persistence, and background workers.
 - Reproducible sample-data evaluation and evidence verification.
-- Public accuracy endpoint and landing-page track record comparing live tracked predictions against last-close persistence and always-up naive baselines.
+- India-first instrument registry: NIFTY 50 constituents, the NIFTY 50 index, spot gold/silver, and USD/INR, EUR/INR, GBP/INR pairs (INR, Asia/Kolkata, NSE holiday calendar).
+- Public accuracy endpoint and landing-page track record comparing live tracked forecasts against last-close persistence and the NIFTY 50 index over the same windows.
 - Walk-forward backtest view: long/flat model strategy vs buy-and-hold equity curve with max drawdown, assumptions disclosed.
 
 ## Architecture
@@ -143,7 +146,16 @@ See [docs/security.md](docs/security.md), [docs/deployment.md](docs/deployment.m
 
 ## Limitations
 
-Predictions are informational and are not investment advice. Backtest results can fail to generalize. Avoid presenting sample fixtures or historical simulations as guarantees of future market behavior.
+Forecasts are informational and are not investment advice. Backtest results can fail to generalize. Avoid presenting sample fixtures or historical simulations as guarantees of future market behavior.
+
+- **NIFTY 50 universe is a snapshot:** index membership changes; the registry in `app/market_data/symbols.py` is the source of truth and can be refreshed.
+- **Metals are spot, not MCX:** gold and silver are delayed USD spot indications from Yahoo Finance, not Indian exchange-traded contracts.
+- **FX is indicative:** currency pairs are delayed interbank indications, not executable prices.
+- **Data may be delayed:** providers used for the demo do not guarantee real-time or error-free data.
+
+## Regulatory note
+
+This is a personal research and engineering project. It is not investment advice, research-analyst output, or a recommendation to buy or sell any security, commodity, or currency. The operator is not a SEBI-registered research analyst or investment adviser. Past model performance does not indicate future results. Do not trade on this.
 
 ## Documentation
 

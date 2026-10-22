@@ -7,7 +7,7 @@ const STEPS = [
   {
     n: "01",
     title: "Ingest",
-    body: "Daily bars for tracked NSE and US symbols are pulled server-side from Twelve Data and Yahoo Finance, then stored with provider provenance.",
+    body: "Daily bars for the NIFTY 50 universe, spot gold and silver, and USD/INR, EUR/INR and GBP/INR pairs are pulled server-side from Yahoo Finance (Twelve Data for optional US symbols), then stored with provider provenance.",
   },
   {
     n: "02",
@@ -86,10 +86,11 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
 
       <header className="hero">
         <p className="eyebrow">MARKET INTELLIGENCE PLATFORM</p>
-        <h1>Next-day NSE stock predictions,<br />scored against real closes.</h1>
+        <h1>Next-trading-day forecasts for NSE, metals and INR pairs,<br />scored against real closes.</h1>
         <p className="hero-sub">
-          Real market data in, next-close predictions out, and every single one reconciled
-          against what actually happened. The numbers below are computed, not written.
+          An India-first model-evaluation sandbox: real market data in, next-close forecasts out,
+          and every single one reconciled against what actually happened, next to a last-close
+          baseline and the NIFTY 50 index. The numbers below are computed, not written.
         </p>
         <div className="hero-cta">
           <button className="btn-primary btn-hero" onClick={IS_DEMO ? onDemo : onRegister} disabled={demoBusy}>
@@ -183,8 +184,10 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
             </table>
             <p className="accuracy-note">
               Live track record since {overall.first_prediction_date}, not a backtest. Sample
-              sizes are small by design and shown on purpose. Predictions are illustrative,
-              not investment advice.
+              sizes are small by design and shown on purpose. Research and engineering project.
+              Not investment advice. Not a SEBI-registered research analyst or investment
+              adviser. Past model performance does not indicate future results. Do not trade
+              on this.
             </p>
           </div>
         )}
@@ -236,7 +239,7 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
           {STACK.map((s) => <span className="stack-badge" key={s}>{s}</span>)}
         </div>
         <p>
-          Predictions are illustrative and are not financial advice. Market data may be
+          Research and engineering project. Not investment advice. Not a SEBI-registered research analyst or investment adviser. Past model performance does not indicate future results. Do not trade on this. Market data may be
           delayed. Demo runs on free-tier hosting; the first load can take up to a minute
           while the instance wakes.
         </p>
