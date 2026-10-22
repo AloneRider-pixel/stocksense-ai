@@ -159,6 +159,215 @@ def public_market_overview() -> dict[str, object]:
     return payload
 
 
+_accuracy_cache: dict[str, object] = {"payload": None, "key": None, "expires": 0.0}
+_ACCURACY_CACHE_TTL_SECONDS = 600.0
+
+
+@router.get(
+    "/public/accuracy",
+    dependencies=[Depends(enforce_public_rate_limit)],
+)
+def public_accuracy(
+    symbol: str | None = Query(default=None, max_length=32),
+) -> dict[str, object]:
+    """Live track record: stored predictions scored against realized closes.
+
+    Unauthenticated, cached briefly, and compared against a last-close
+    persistence baseline so the model has to beat "tomorrow = today" to show
+    value. Sample sizes are part of the payload on purpose.
+    """
+    key = (symbol or "").strip().upper() or None
+    now = time.time()
+    cached = _accuracy_cache.get("payload")
+    if (
+        cached is not None
+        and _accuracy_cache.get("key") == key
+        and now < float(_accuracy_cache.get("expires", 0.0))
+    ):
+        return cached  # type: ignore[return-value]
+
+    session = get_session()
+    try:
+        summaries = PredictionRepository(session).public_accuracy(symbol=key)
+    finally:
+        session.close()
+
+    total = sum(int(row["evaluated_predictions"]) for row in summaries)
+    overall: dict[str, object] = {"evaluated_predictions": total}
+    for field in (
+        "mae",
+        "mape_pct",
+        "directional_accuracy_pct",
+        "baseline_mae",
+        "baseline_mape_pct",
+        "baseline_directional_accuracy_pct",
+        "improvement_vs_persistence_pct",
+    ):
+        weighted = [
+            (float(row[field]), int(row["evaluated_predictions"]))
+            for row in summaries
+            if row[field] is not None
+        ]
+        denominator = sum(weight for _, weight in weighted)
+        overall[field] = (
+            round(sum(value * weight for value, weight in weighted) / denominator, 4)
+            if denominator
+            else None
+        )
+    if summaries:
+        overall["first_prediction_date"] = min(
+            str(row["first_prediction_date"]) for row in summaries
+        )
+        overall["last_prediction_date"] = max(
+            str(row["last_prediction_date"]) for row in summaries
+        )
+
+    payload = {
+        "status": "ok" if total else "insufficient_data",
+        "overall": overall,
+        "symbols": summaries,
+        "methodology": (
+            "Every prediction served by the API is stored when it is made and "
+            "reconciled against the next available market close. Only "
+            "reconciled predictions are counted. The baseline is last-close "
+            "persistence (predicting no change); a model must beat it to add "
+            "value. This is a live track record, not a backtest."
+        ),
+        "disclaimer": (
+            "Predictions are illustrative and are not investment advice. "
+            "Past forecast error does not guarantee future performance."
+        ),
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    _accuracy_cache["payload"] = payload
+    _accuracy_cache["key"] = key
+    _accuracy_cache["expires"] = now + _ACCURACY_CACHE_TTL_SECONDS
+    return payload
+
+
+_latest_predictions_cache: dict[str, object] = {"payload": None, "expires": 0.0}
+_LATEST_PREDICTIONS_CACHE_TTL_SECONDS = 300.0
+
+
+@router.get(
+    "/public/predictions/latest",
+    dependencies=[Depends(enforce_public_rate_limit)],
+)
+def public_latest_predictions() -> dict[str, object]:
+    """Most recent stored prediction per symbol, anonymized.
+
+    These are predictions the API actually served and persisted; each one is
+    later reconciled against the realized close for the accuracy endpoint.
+    """
+    now = time.time()
+    cached = _latest_predictions_cache.get("payload")
+    if cached is not None and now < float(
+        _latest_predictions_cache.get("expires", 0.0)
+    ):
+        return cached  # type: ignore[return-value]
+
+    session = get_session()
+    try:
+        latest = PredictionRepository(session).latest_per_symbol()
+    finally:
+        session.close()
+
+    payload = {
+        "predictions": [
+            {
+                "symbol": record.symbol,
+                "prediction_date": record.prediction_date.isoformat(),
+                "predicted_close": float(record.predicted_close),
+                "expected_change_pct": float(record.expected_change_pct),
+                "model": record.model,
+            }
+            for record in latest
+        ],
+        "disclaimer": (
+            "Predictions are illustrative and are not investment advice."
+        ),
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    _latest_predictions_cache["payload"] = payload
+    _latest_predictions_cache["expires"] = (
+        now + _LATEST_PREDICTIONS_CACHE_TTL_SECONDS
+    )
+    return payload
+
+
+@router.get(
+    "/backtest/{symbol}",
+    dependencies=[Depends(enforce_rate_limit)],
+)
+def backtest_symbol(
+    symbol: str,
+    limit: int = Query(default=500, ge=120, le=2000),
+    current_user=Depends(get_current_user),
+) -> dict[str, object]:
+    """Walk-forward long/flat strategy vs buy-and-hold on stored daily bars.
+
+    Fully disclosed: walk-forward out-of-sample predictions decide a
+    long-or-flat position for the next bar; no transaction costs, no
+    shorting, no leverage. Illustrative evaluation, not trading advice.
+    """
+    from app.services.backtest import run_backtest
+
+    normalized = symbol.strip().upper()
+    session = get_session()
+    try:
+        repository = MarketDataRepository(session)
+        stored = repository.list_history(normalized, limit=limit)
+    finally:
+        session.close()
+
+    if len(stored) < 120:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "INSUFFICIENT_HISTORY",
+                "message": (
+                    f"Not enough stored bars for '{normalized}' to backtest "
+                    "(need at least 120)."
+                ),
+            },
+        )
+
+    import pandas as pd
+
+    bars = pd.DataFrame(
+        [
+            {
+                "date": row.date.isoformat(),
+                "close": float(row.close),
+                "volume": int(row.volume),
+            }
+            for row in stored
+        ]
+    )
+    try:
+        result = run_backtest(bars)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "BACKTEST_INPUT_ERROR", "message": str(exc)},
+        ) from exc
+
+    return {
+        "symbol": normalized,
+        "metrics": result.metrics,
+        "equity_curve": result.equity_curve,
+        "assumptions": (
+            "Walk-forward out-of-sample predictions; long when the model "
+            "predicts an up move, flat otherwise. No transaction costs, no "
+            "shorting, no leverage. Daily bars may be delayed."
+        ),
+        "disclaimer": (
+            "Backtest results are illustrative and are not investment "
+            "advice. Past performance does not guarantee future results."
+        ),
+    }
+
+
 def _ingest_symbol(symbol: str, limit: int) -> dict[str, int | str]:
     session = get_session()
     try:

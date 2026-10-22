@@ -249,6 +249,129 @@ class PredictionRepository:
             ) if directions else None,
         }
 
+    def public_accuracy(self, symbol: str | None = None) -> list[dict[str, object]]:
+        """Anonymized per-symbol accuracy of reconciled predictions.
+
+        Counts only predictions already scored against a realized close and
+        compares each one to a last-close persistence baseline (the close on
+        the prediction date), so the model must beat "tomorrow = today" to
+        show value.
+        """
+        stmt = select(PredictionRecord).where(
+            PredictionRecord.actual_close.is_not(None)
+        )
+        if symbol:
+            stmt = stmt.where(PredictionRecord.symbol == symbol.upper())
+        records = list(self.session.scalars(stmt).all())
+        if not records:
+            return []
+
+        baseline_closes: dict[tuple[str, date], float] = {}
+        for rec in records:
+            key = (rec.symbol, rec.prediction_date)
+            if key in baseline_closes:
+                continue
+            close = self.session.scalar(
+                select(MarketBarRecord.close).where(
+                    MarketBarRecord.symbol == rec.symbol,
+                    MarketBarRecord.date == rec.prediction_date,
+                )
+            )
+            if close is not None:
+                baseline_closes[key] = float(close)
+
+        grouped: dict[str, list[PredictionRecord]] = {}
+        for rec in records:
+            grouped.setdefault(rec.symbol, []).append(rec)
+
+        summaries: list[dict[str, object]] = []
+        for sym in sorted(grouped):
+            rows = grouped[sym]
+            errors = [r.absolute_error for r in rows if r.absolute_error is not None]
+            pct_errors = [
+                r.percentage_error for r in rows if r.percentage_error is not None
+            ]
+            directions = [
+                r.direction_correct for r in rows if r.direction_correct is not None
+            ]
+            baseline_up = [
+                float(r.actual_close) >= baseline_closes[(r.symbol, r.prediction_date)]
+                for r in rows
+                if (r.symbol, r.prediction_date) in baseline_closes and r.actual_close
+            ]
+            base_pairs = [
+                (baseline_closes[(r.symbol, r.prediction_date)], float(r.actual_close))
+                for r in rows
+                if (r.symbol, r.prediction_date) in baseline_closes and r.actual_close
+            ]
+            baseline_errors = [abs(b - a) for b, a in base_pairs]
+            baseline_pct = [abs(b - a) / a * 100 for b, a in base_pairs]
+
+            model_mae = sum(errors) / len(errors) if errors else None
+            baseline_mae = (
+                sum(baseline_errors) / len(baseline_errors) if baseline_errors else None
+            )
+            improvement = None
+            if baseline_mae and model_mae is not None:
+                improvement = round((baseline_mae - model_mae) / baseline_mae * 100, 4)
+
+            summaries.append(
+                {
+                    "symbol": sym,
+                    "evaluated_predictions": len(rows),
+                    "first_prediction_date": min(
+                        r.prediction_date for r in rows
+                    ).isoformat(),
+                    "last_prediction_date": max(
+                        r.prediction_date for r in rows
+                    ).isoformat(),
+                    "mae": round(model_mae, 4) if model_mae is not None else None,
+                    "mape_pct": (
+                        round(sum(pct_errors) / len(pct_errors), 4)
+                        if pct_errors
+                        else None
+                    ),
+                    "directional_accuracy_pct": (
+                        round(
+                            sum(bool(v) for v in directions) / len(directions) * 100,
+                            4,
+                        )
+                        if directions
+                        else None
+                    ),
+                    "baseline_mae": (
+                        round(baseline_mae, 4) if baseline_mae is not None else None
+                    ),
+                    "baseline_directional_accuracy_pct": (
+                        round(sum(baseline_up) / len(baseline_up) * 100, 4)
+                        if baseline_up
+                        else None
+                    ),
+                    "baseline_mape_pct": (
+                        round(sum(baseline_pct) / len(baseline_pct), 4)
+                        if baseline_pct
+                        else None
+                    ),
+                    "improvement_vs_persistence_pct": improvement,
+                }
+            )
+        return summaries
+
+
+    def latest_per_symbol(self) -> list[PredictionRecord]:
+        """Most recent stored prediction per symbol, newest first."""
+        stmt = select(PredictionRecord).order_by(PredictionRecord.created_at.desc())
+        records = list(self.session.scalars(stmt).all())
+        seen: set[str] = set()
+        latest: list[PredictionRecord] = []
+        for record in records:
+            if record.symbol in seen:
+                continue
+            seen.add(record.symbol)
+            latest.append(record)
+        return latest
+
+
 
 class WatchlistRepository:
     def __init__(self, session) -> None:

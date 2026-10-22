@@ -64,3 +64,17 @@ The source, model version, feature set, row count, evaluation metrics, and train
 Online predictions are stored with their prediction date. When the next market bar is ingested, reconciliation attaches the first later trading bar and computes the realized error and directional result.
 
 This creates a second, production-style measurement path in addition to offline walk-forward evaluation.
+
+
+## Live prediction tracking (public accuracy)
+
+`GET /api/v1/public/accuracy` aggregates every prediction the API has served and later reconciled against the next realized close, anonymized and grouped per symbol. It reports evaluated count, MAE, MAPE, directional accuracy, and two naive baselines computed over the same scored predictions:
+
+- last-close persistence (predicting no change), compared on MAE/MAPE; and
+- an always-up directional guess, compared on hit rate.
+
+This is a live track record, not a backtest: sample sizes are shown on purpose and start small. `GET /api/v1/public/predictions/latest` exposes the most recent stored prediction per symbol so the forecasts are inspectable before they are scored.
+
+## Backtest view
+
+`GET /api/v1/backtest/{symbol}` runs a fully disclosed long/flat strategy over walk-forward out-of-sample predictions on stored daily bars: long when the model predicts an up move, flat otherwise, no transaction costs, no shorting, no leverage. It returns the strategy and buy-and-hold equity curves, total returns, max drawdowns, and the out-of-sample directional hit rate. Results are illustrative evaluation evidence, not trading performance claims.

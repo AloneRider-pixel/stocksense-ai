@@ -3,6 +3,8 @@ import { api } from "../lib/api";
 import { FALLBACK_SYMBOLS, IS_DEMO } from "../config";
 import Brand from "./Brand";
 import PriceChart from "./PriceChart";
+import EquityChart from "./EquityChart";
+import PredActualChart from "./PredActualChart";
 
 function fmtPct(v) {
   if (v == null) return "—";
@@ -46,6 +48,12 @@ export default function Dashboard({ user, onSignOut }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [dataSource, setDataSource] = useState("");
+  const [symbolQuery, setSymbolQuery] = useState("");
+  const [publicAccuracy, setPublicAccuracy] = useState(null);
+  const [backtest, setBacktest] = useState(null);
+  const [backtestSymbol, setBacktestSymbol] = useState(null);
+  const [backtestBusy, setBacktestBusy] = useState(false);
+  const [backtestError, setBacktestError] = useState("");
 
   useEffect(() => {
     api("/public/market-overview")
@@ -95,6 +103,7 @@ export default function Dashboard({ user, onSignOut }) {
     api("/metrics").then((m) => {
       if (m && m.status !== "not_available") setOfflineMetrics(m);
     }).catch(() => {});
+    api("/public/accuracy").then(setPublicAccuracy).catch(() => setPublicAccuracy(null));
   }, []);
 
   const market = bars.length ? bars[bars.length - 1] : null;
@@ -161,10 +170,29 @@ export default function Dashboard({ user, onSignOut }) {
     setTab("overview");
   }
 
+  async function runBacktest(sym) {
+    setBacktestBusy(true);
+    setBacktestError("");
+    setBacktest(null);
+    setBacktestSymbol(sym);
+    try {
+      const result = await api("/backtest/" + sym);
+      setBacktest(result);
+    } catch (e) {
+      setBacktestError(e.message);
+    } finally {
+      setBacktestBusy(false);
+    }
+  }
+
   const firstName = user.full_name || user.email.split("@")[0];
   const currency = symbolMeta[symbol]?.currency || "USD";
   const exchangeOf = (s) => symbolMeta[s]?.exchange || "US";
-  const visibleSymbols = exchange === "ALL" ? symbols : symbols.filter((s) => exchangeOf(s) === exchange);
+  const exchangeSymbols = exchange === "ALL" ? symbols : symbols.filter((s) => exchangeOf(s) === exchange);
+  const q = symbolQuery.trim().toLowerCase();
+  const visibleSymbols = q
+    ? exchangeSymbols.filter((s) => s.toLowerCase().includes(q) || (symbolMeta[s]?.name || "").toLowerCase().includes(q))
+    : exchangeSymbols;
   const hasNse = symbols.some((s) => exchangeOf(s) === "NSE");
 
   return (
@@ -177,6 +205,7 @@ export default function Dashboard({ user, onSignOut }) {
           <a className={tab === "screener" ? "active" : ""} onClick={() => setTab("screener")}>Screener</a>
           <a className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>Prediction activity</a>
           <a className={tab === "evaluation" ? "active" : ""} onClick={() => setTab("evaluation")}>Model evaluation</a>
+          <a className={tab === "backtest" ? "active" : ""} onClick={() => setTab("backtest")}>Backtest</a>
         </nav>
         {dataSource && <p className="aside-note">Market data: {dataSource}. May be delayed.</p>}
         <button className="ghost" onClick={onSignOut}>Sign out</button>
@@ -214,6 +243,12 @@ export default function Dashboard({ user, onSignOut }) {
                   </h2>
                 </div>
                 <div className="symbol-pills">
+                  <input
+                    className="symbol-search"
+                    placeholder="Search symbol"
+                    value={symbolQuery}
+                    onChange={(e) => setSymbolQuery(e.target.value)}
+                  />
                   {hasNse && (
                     <>
                       <button className={"pill" + (exchange === "ALL" ? " active" : "")} onClick={() => setExchange("ALL")}>All</button>
@@ -389,6 +424,33 @@ export default function Dashboard({ user, onSignOut }) {
               )}
             </section>
             <section className="panel">
+              <p className="eyebrow">PREDICTED VS ACTUAL</p>
+              <h2>Every scored prediction, on one chart.</h2>
+              <PredActualChart items={history} currency={currency} />
+              <p className="muted small-print">Only predictions with a realized close are drawn; pending ones are excluded, not hidden.</p>
+            </section>
+            {publicAccuracy && publicAccuracy.symbols?.length > 0 && (
+              <section className="panel">
+                <p className="eyebrow">ACCURACY BY SYMBOL</p>
+                <h2>Live record vs the naive baseline.</h2>
+                <div className="table table-head accuracy-grid">
+                  <span>Symbol</span><span>Scored</span><span>Model MAPE</span><span>Baseline MAPE</span><span>Hit rate</span>
+                </div>
+                <div className="table accuracy-grid">
+                  {publicAccuracy.symbols.map((row) => (
+                    <div className="row" key={row.symbol}>
+                      <span>{row.symbol}</span>
+                      <span>{row.evaluated_predictions}</span>
+                      <span>{row.mape_pct == null ? "—" : Number(row.mape_pct).toFixed(2) + "%"}</span>
+                      <span>{row.baseline_mape_pct == null ? "—" : Number(row.baseline_mape_pct).toFixed(2) + "%"}</span>
+                      <span>{row.directional_accuracy_pct == null ? "—" : Number(row.directional_accuracy_pct).toFixed(1) + "%"}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="muted small-print">Baseline is last-close persistence over the same scored predictions. Live record, not a backtest.</p>
+              </section>
+            )}
+            <section className="panel">
               <p className="eyebrow">EVALUATION CONTRACT</p>
               <h2>Chronological, or it does not count.</h2>
               <p className="muted">
@@ -399,6 +461,41 @@ export default function Dashboard({ user, onSignOut }) {
               </p>
             </section>
           </>
+        )}
+
+        {tab === "backtest" && (
+          <section className="panel">
+            <p className="eyebrow">BACKTEST</p>
+            <h2>Model strategy vs buy-and-hold.</h2>
+            <p className="muted">
+              Walk-forward out-of-sample predictions decide a long-or-flat position for the
+              next bar. No transaction costs, no shorting, no leverage. Pick a symbol to run
+              it on stored daily bars.
+            </p>
+            <div className="symbol-pills">
+              {symbols.map((s) => (
+                <button key={s} className={"pill" + (s === backtestSymbol ? " active" : "")} onClick={() => runBacktest(s)} disabled={backtestBusy}>
+                  {s}
+                </button>
+              ))}
+            </div>
+            {backtestBusy && <p className="muted">Running walk-forward backtest…</p>}
+            {backtestError && <div className="error">{backtestError}</div>}
+            {backtest && (
+              <>
+                <section className="metric-grid">
+                  <article><span>Periods</span><strong>{backtest.metrics.periods}</strong><small>Out-of-sample steps</small></article>
+                  <article><span>Strategy return</span><strong className={backtest.metrics.strategy_return_pct >= 0 ? "positive" : "negative"}>{fmtPct(backtest.metrics.strategy_return_pct)}</strong><small>Long/flat, no costs</small></article>
+                  <article><span>Buy-and-hold return</span><strong className={backtest.metrics.buy_hold_return_pct >= 0 ? "positive" : "negative"}>{fmtPct(backtest.metrics.buy_hold_return_pct)}</strong><small>Same period</small></article>
+                  <article><span>Strategy max drawdown</span><strong className="negative">{Number(backtest.metrics.strategy_max_drawdown_pct).toFixed(1)}%</strong><small>Peak to trough</small></article>
+                  <article><span>Buy-hold max drawdown</span><strong className="negative">{Number(backtest.metrics.buy_hold_max_drawdown_pct).toFixed(1)}%</strong><small>Peak to trough</small></article>
+                  <article><span>Direction hit rate</span><strong>{Number(backtest.metrics.directional_hit_rate_pct).toFixed(1)}%</strong><small>Out-of-sample</small></article>
+                </section>
+                <EquityChart curve={backtest.equity_curve} />
+                <p className="muted small-print">{backtest.assumptions} {backtest.disclaimer}</p>
+              </>
+            )}
+          </section>
         )}
       </main>
     </div>
