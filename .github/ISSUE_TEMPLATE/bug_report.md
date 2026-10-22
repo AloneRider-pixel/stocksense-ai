@@ -1,19 +1,20 @@
 ---
 name: Bug report
-about: Report a reproducible product defect
-title: "[Bug] "
+about: Something works incorrectly or not at all
 labels: bug
-assignees: ""
 ---
 
-## Describe the bug
+**What happened**
 
-## Reproduction steps
+**What you expected**
 
-## Expected behavior
+**Steps to reproduce**
 
-## Actual behavior
+1.
+2.
 
-## Environment
+**Where** (live demo / local / API only)
 
-## Logs / request ID
+**Symbol and request details** (if data-related; include the X-Request-ID response header if you have it)
+
+**Logs / screenshots**
