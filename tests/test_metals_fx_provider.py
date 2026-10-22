@@ -24,7 +24,8 @@ def test_registry_routes_metals_and_fx_to_chain():
 
 
 def test_twelve_data_symbol_mapping():
-    assert METALS_FX_SYMBOLS["GOLD"] == ("XAU/USD", "XAUUSD=X")
+    assert METALS_FX_SYMBOLS["GOLD"] == ("XAU/USD", "GC=F")
+    assert METALS_FX_SYMBOLS["SILVER"] == ("XAG/USD", "SI=F")
     assert METALS_FX_SYMBOLS["USDINR"] == ("USD/INR", "USDINR=X")
 
 

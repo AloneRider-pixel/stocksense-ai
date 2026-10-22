@@ -3,9 +3,12 @@
 Primary source is Twelve Data (symbol form "XAU/USD", "USD/INR") when an API
 key is configured: reliable and documented for forex and precious metals on
 the free plan. Without a key, or when Twelve Data errors, fall back to
-Yahoo Finance ("XAUUSD=X", "USDINR=X"), which is unofficial and rate-limited
-but needs no key. Bars may be delayed or indicative either way; these are
-not exchange-traded Indian contracts (no MCX) and not executable FX prices.
+Yahoo Finance, which is unofficial and rate-limited but needs no key. The
+Yahoo metals tickers are COMEX futures ("GC=F", "SI=F") because the spot
+tickers ("XAUUSD=X", "XAGUSD=X") frequently return no data; FX uses the
+spot tickers ("USDINR=X"), which work. Bars may be delayed or indicative
+either way; these are not exchange-traded Indian contracts (no MCX) and
+not executable FX prices.
 """
 
 from __future__ import annotations
@@ -19,8 +22,8 @@ from app.market_data.yfinance_provider import YFinanceError, YFinanceNSEProvider
 
 # display symbol -> (Twelve Data symbol, Yahoo Finance symbol)
 METALS_FX_SYMBOLS: dict[str, tuple[str, str]] = {
-    "GOLD": ("XAU/USD", "XAUUSD=X"),
-    "SILVER": ("XAG/USD", "XAGUSD=X"),
+    "GOLD": ("XAU/USD", "GC=F"),
+    "SILVER": ("XAG/USD", "SI=F"),
     "USDINR": ("USD/INR", "USDINR=X"),
     "EURINR": ("EUR/INR", "EURINR=X"),
     "GBPINR": ("GBP/INR", "GBPINR=X"),
