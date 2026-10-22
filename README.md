@@ -12,6 +12,13 @@ Built solo by [Himanshu Bisht](https://github.com/AloneRider-pixel) to demonstra
 
 **Stack:** FastAPI · PostgreSQL · Redis · scikit-learn · React/Vite · Docker · GitHub Actions
 
+## Try it in 2 minutes
+
+1. Open the [live demo](https://stocksense-ai-demo.onrender.com). First load can take up to a minute on free-tier hosting.
+2. Click **Live dashboard** - one click signs you into the shared demo account.
+3. Pick a symbol pill (NSE or US) and press **Run prediction**, or open **Backtest** to see the model strategy vs buy-and-hold on real stored bars.
+4. Check the landing-page track record: every prediction is stored and scored against the real close, next to naive baselines.
+
 ## Live demo
 
 Try the deployed app: [stocksense-ai-demo.onrender.com](https://stocksense-ai-demo.onrender.com)
