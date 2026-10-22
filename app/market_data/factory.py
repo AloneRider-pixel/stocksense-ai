@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.core.config import settings
 from app.market_data.base import MarketDataProvider
 from app.market_data.csv_provider import CSVMarketDataProvider
+from app.market_data.metals_fx import MetalsFXProvider
 from app.market_data.symbols import describe_symbol
 from app.market_data.twelve_data import TwelveDataProvider
 from app.market_data.yfinance_provider import YFinanceNSEProvider
@@ -29,4 +30,6 @@ def get_provider_for_symbol(symbol: str) -> MarketDataProvider:
     info = describe_symbol(symbol)
     if info.provider == "yfinance_nse":
         return YFinanceNSEProvider()
+    if info.provider == "metals_fx":
+        return MetalsFXProvider()
     return get_market_data_provider()
