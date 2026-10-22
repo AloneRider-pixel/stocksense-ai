@@ -95,7 +95,6 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
           <button className="btn-primary btn-hero" onClick={IS_DEMO ? onDemo : onRegister} disabled={demoBusy}>
             {demoBusy ? "Signing you in..." : "Live dashboard"}
           </button>
-          <a className="btn-outline btn-hero" href={GITHUB_URL} target="_blank" rel="noreferrer">View code</a>
         </div>
         {IS_DEMO && (
           <p className="hero-note">One click signs you into the shared demo account, no signup needed.</p>
