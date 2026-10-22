@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     market_data_provider: str = "twelve_data"
     benchmark_index_symbol: str = "NIFTY50"
     demo_seed_max_symbols: int = 20
+    log_level: str = "INFO"
+    log_format: str = "json"  # "json" for aggregators, "text" for local dev
     demo_mode: bool = False
     demo_user_email: str = "demo@stocksense.app"
     demo_user_password: str = "Demo1234!"

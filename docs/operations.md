@@ -45,6 +45,12 @@ These files are generated locally and ignored by Git.
 - Scrape /internal/metrics with a metrics system.
 - Monitor /health/live and /health/ready.
 
+## Logs and metrics
+
+- LOG_FORMAT=json (default) emits one JSON object per line: ts, level, logger, message, plus request_id, method, path, status_code, and duration_ms on request lines. LOG_FORMAT=text gives a human-readable line for local development; LOG_LEVEL controls verbosity.
+- Every HTTP response carries an X-Request-ID header; send your own X-Request-ID to correlate client and server logs, or the API generates one.
+- Metrics: the Prometheus endpoint /internal/metrics exposes stocksense_http_requests_total (method/path/status) and stocksense_http_request_duration_seconds (method/path); request logs carry the same labels, so a slow metric bucket can be traced to individual request lines by request_id.
+
 ## Data-provider note
 
 The default live provider is Twelve Data. Its documented /time_series endpoint supplies daily OHLCV data and supports up to 5,000 data points per request. Provider terms and plan limits apply.
