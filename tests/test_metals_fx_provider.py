@@ -37,7 +37,8 @@ def test_prefers_twelve_data_when_key_configured(monkeypatch):
     )
     bars = provider.history("GOLD", limit=5)
     assert calls == ["XAU/USD"]
-    assert bars[0].symbol == "XAU/USD"
+    # bars are tagged with the display symbol for storage and validation
+    assert bars[0].symbol == "GOLD"
 
 
 def test_falls_back_to_yahoo_on_twelve_data_error(monkeypatch):
@@ -54,7 +55,7 @@ def test_falls_back_to_yahoo_on_twelve_data_error(monkeypatch):
     )
     bars = provider.history("USDINR", limit=5)
     assert calls == ["USDINR=X"]
-    assert bars[0].symbol == "USDINR=X"
+    assert bars[0].symbol == "USDINR"
 
 
 def test_uses_yahoo_when_no_key(monkeypatch):
