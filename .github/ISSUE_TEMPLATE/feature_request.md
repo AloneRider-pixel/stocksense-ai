@@ -1,15 +1,13 @@
 ---
 name: Feature request
-about: Propose a product or engineering improvement
-title: "[Feature] "
+about: Propose an improvement or new capability
 labels: enhancement
-assignees: ""
 ---
 
-## Problem
+**Problem it solves**
 
-## Proposed solution
+**Proposed behavior**
 
-## Alternatives considered
+**Alternatives considered**
 
-## Acceptance criteria
+**Framing check** (this project is an evaluation sandbox: no buy/sell advice, no price targets, no alerts)
