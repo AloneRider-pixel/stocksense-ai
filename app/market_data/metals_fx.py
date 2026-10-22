@@ -10,6 +10,8 @@ not exchange-traded Indian contracts (no MCX) and not executable FX prices.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from app.core.config import settings
 from app.market_data.base import MarketBar
 from app.market_data.twelve_data import TwelveDataError, TwelveDataProvider
@@ -40,8 +42,19 @@ class MetalsFXProvider:
 
         if settings.twelve_data_api_key:
             try:
-                return self._twelve_data.history(td_symbol, limit=limit)
+                bars = self._twelve_data.history(td_symbol, limit=limit)
+                return [self._as_display_symbol(bar, normalized) for bar in bars]
             except TwelveDataError:
                 pass  # fall through to Yahoo
 
-        return self._yfinance.history(yf_symbol, limit=limit)
+        bars = self._yfinance.history(yf_symbol, limit=limit)
+        return [self._as_display_symbol(bar, normalized) for bar in bars]
+
+    @staticmethod
+    def _as_display_symbol(bar: MarketBar, display_symbol: str) -> MarketBar:
+        """Tag bars with the universe display symbol (e.g. GOLD, USDINR).
+
+        Providers return their native symbol ("XAU/USD", "XAUUSD=X"), but
+        storage and downstream validation key on the display symbol.
+        """
+        return replace(bar, symbol=display_symbol)

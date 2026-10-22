@@ -59,3 +59,8 @@ def configure_logging(level: str = "INFO", fmt: str = "json") -> None:
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level.upper())
+
+    # Third-party HTTP clients log full request URLs (including the Twelve
+    # Data apikey query parameter) at INFO; keep them at WARNING or above.
+    for noisy in ("httpx", "httpcore", "urllib3"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
