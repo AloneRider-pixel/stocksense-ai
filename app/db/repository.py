@@ -219,6 +219,9 @@ class PredictionRepository:
                 "mae": None,
                 "mape_pct": None,
                 "directional_accuracy_pct": None,
+                "baseline_mae": None,
+                "baseline_directional_accuracy_pct": None,
+                "improvement_vs_persistence_pct": None,
             }
 
         errors = [
@@ -237,9 +240,31 @@ class PredictionRepository:
             if record.direction_correct is not None
         ]
 
+        model_mae = round(sum(errors) / len(errors), 6) if errors else None
+
+        # Last-close persistence baseline: "next close = close on the
+        # prediction date". Directional baseline is always-up, matching the
+        # public accuracy methodology.
+        baseline_closes = self.baseline_closes_for(records)
+        base_pairs = [
+            (baseline_closes[(r.symbol, r.prediction_date)], float(r.actual_close))
+            for r in records
+            if (r.symbol, r.prediction_date) in baseline_closes
+            and r.actual_close is not None
+        ]
+        baseline_mae = (
+            round(sum(abs(b - a) for b, a in base_pairs) / len(base_pairs), 6)
+            if base_pairs
+            else None
+        )
+        baseline_up = [a >= b for b, a in base_pairs]
+        improvement = None
+        if baseline_mae and model_mae is not None:
+            improvement = round((baseline_mae - model_mae) / baseline_mae * 100, 4)
+
         return {
             "evaluated_predictions": len(records),
-            "mae": round(sum(errors) / len(errors), 6) if errors else None,
+            "mae": model_mae,
             "mape_pct": round(
                 sum(percentage_errors) / len(percentage_errors), 6
             ) if percentage_errors else None,
@@ -247,7 +272,33 @@ class PredictionRepository:
                 sum(bool(value) for value in directions) / len(directions) * 100,
                 6,
             ) if directions else None,
+            "baseline_mae": baseline_mae,
+            "baseline_directional_accuracy_pct": (
+                round(sum(baseline_up) / len(baseline_up) * 100, 6)
+                if baseline_up
+                else None
+            ),
+            "improvement_vs_persistence_pct": improvement,
         }
+
+    def baseline_closes_for(
+        self, records: list[PredictionRecord]
+    ) -> dict[tuple[str, date], float]:
+        """Close on each record's prediction_date (persistence baseline)."""
+        closes: dict[tuple[str, date], float] = {}
+        for rec in records:
+            key = (rec.symbol, rec.prediction_date)
+            if key in closes:
+                continue
+            close = self.session.scalar(
+                select(MarketBarRecord.close).where(
+                    MarketBarRecord.symbol == rec.symbol,
+                    MarketBarRecord.date == rec.prediction_date,
+                )
+            )
+            if close is not None:
+                closes[key] = float(close)
+        return closes
 
     def public_accuracy(self, symbol: str | None = None) -> list[dict[str, object]]:
         """Anonymized per-symbol accuracy of reconciled predictions.

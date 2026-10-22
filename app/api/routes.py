@@ -586,12 +586,19 @@ def prediction_history(
 ) -> list[PredictionHistoryItem]:
     session = get_session()
     try:
-        records = PredictionRepository(session).list_recent(
+        repository = PredictionRepository(session)
+        records = repository.list_recent(
             user_id=current_user.id,
             symbol=symbol.upper() if symbol else None,
             limit=limit,
         )
-        return [PredictionHistoryItem.model_validate(record) for record in records]
+        baseline = repository.baseline_closes_for(records)
+        items = []
+        for record in records:
+            item = PredictionHistoryItem.model_validate(record)
+            item.baseline_close = baseline.get((record.symbol, record.prediction_date))
+            items.append(item)
+        return items
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

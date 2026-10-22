@@ -40,4 +40,5 @@ class PredictionHistoryItem(BaseModel):
     percentage_error: float | None
     direction_correct: bool | None
     evaluated_at: datetime | None
+    baseline_close: float | None = None
     created_at: datetime
