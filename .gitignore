@@ -10,3 +10,4 @@ frontend/dist/
 
 models/*.csv
 models/*.json
+data/nifty500_constituents.csv

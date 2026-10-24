@@ -557,3 +557,61 @@ aside nav a.active, aside nav a:hover { color: #edf4ff; background: #13223c; tex
 }
 
 .table.accuracy-grid .row, .table-head.accuracy-grid { grid-template-columns: 1.2fr 0.8fr 1fr 1fr 1fr; }
+
+/* Nifty 500 scanner */
+.table.scanner-grid .row, .table-head.scanner-grid { grid-template-columns: 1.7fr .7fr 1fr 1.3fr; }
+.scanner .pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 6px; }
+.scanner .explain { width: 100%; box-sizing: border-box; margin-top: 18px; border-color: #5b9dff; }
+.scanner .explain h3 { margin: 0; font-size: 16px; }
+.scanner .explain ul, .scanner > ul { margin: 6px 0 12px; padding-left: 18px; color: #a4b5c8; font-size: 13px; line-height: 1.6; }
+.scanner .eyebrow { margin: 16px 0 4px; }
+.scanner .explain .eyebrow { margin: 14px 0 2px; }
+.scanner .explain ul { margin: 4px 0 8px; }
+.scanner .explain p { margin: 8px 0 0; }
+.scanner .empty { padding: 14px 12px; }
+@media (max-width: 720px) {
+  .table.scanner-grid .row, .table-head.scanner-grid { grid-template-columns: 1.4fr .6fr .8fr 1fr; gap: 6px; font-size: 12px; }
+}
+.scanner input, .scanner select { max-width: 100%; box-sizing: border-box; }
+.scanner .row span, .scanner .table-head span { min-width: 0; overflow-wrap: anywhere; }
+.scanner .explain .eyebrow, .scanner .explain ul, .scanner .explain p { margin-block: 0; }
+.scanner .explain .eyebrow { margin-top: 12px; margin-bottom: 4px; }
+.scanner .explain ul { padding-left: 18px; line-height: 1.5; }
+.scanner .explain ul li { margin: 0; }
+.scanner .explain .small-print { margin-top: 10px; }
+
+/* Mobile: card rows instead of cramped columns */
+.scanner .btn-secondary { margin: 10px 0 0; padding: 8px 14px; border-radius: 8px; border: 1px solid #2b3a52; background: transparent; color: #a4b5c8; cursor: pointer; }
+@media (max-width: 720px) {
+  .scanner .table-head.scanner-grid { display: none; }
+  .scanner .table.scanner-grid .row { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 10px 12px; font-size: 13px; }
+  .scanner .table.scanner-grid .row > span:first-child { flex: 1 1 100%; font-weight: 600; }
+  .scanner .table.scanner-grid .row > span:not(:first-child)::before { color: #7f93aa; font-weight: 400; margin-right: 4px; }
+  .g-rs .row > span:nth-child(2)::before { content: "RS"; }
+  .g-rs .row > span:nth-child(3)::before { content: "vs NIFTY 50"; }
+  .g-rs .row > span:nth-child(4) { flex: 1 1 100%; color: #7f93aa; }
+  .g-ind .row > span:nth-child(2)::before { content: "RS now"; }
+  .g-ind .row > span:nth-child(3)::before { content: "before"; }
+  .g-ind .row > span:nth-child(4)::before { content: "change"; }
+  .g-bo .row > span:nth-child(2)::before { content: "close vs level"; }
+  .g-bo .row > span:nth-child(3)::before { content: "volume"; }
+  .g-bo .row > span:nth-child(4)::before { content: "breaks below"; }
+  .g-lost .row > span:nth-child(2)::before { content: "days ago"; }
+  .g-lost .row > span:nth-child(3)::before { content: "level"; }
+  .g-lost .row > span:nth-child(4)::before { content: "close"; }
+  .g-drop .row > span:nth-child(2)::before { content: "now"; }
+  .g-drop .row > span:nth-child(3)::before { content: "before"; }
+  .g-drop .row > span:nth-child(4)::before { content: "change"; }
+  .g-runs .row > span:nth-child(2)::before { content: "type"; }
+  .g-runs .row > span:nth-child(3)::before { content: "bar date"; }
+  .g-runs .row > span:nth-child(4)::before { content: "ranked"; }
+  .g-sig .row > span:nth-child(2)::before { content: "type"; }
+  .g-sig .row > span:nth-child(3)::before { content: "5d vs NIFTY"; }
+  .g-sig .row > span:nth-child(4)::before { content: "20d / 60d"; }
+  .g-bt .row > span:nth-child(2)::before { content: "return"; }
+  .g-bt .row > span:nth-child(3)::before { content: "max drawdown"; }
+  .g-bt .row > span:nth-child(4)::before { content: "days"; }
+  .g-sum .row > span:nth-child(2)::before { content: ""; }
+}
+@media (max-width: 720px) { .scanner .table-head.bt-head { display: block; padding: 8px 12px; } .scanner .table-head.bt-head span:not(:first-child) { display: none; } }
+@media (max-width: 720px) { .scanner .screener-filters select, .scanner .screener-filters input { width: 100%; } .scanner .screener-filters label { flex: 1 1 45%; min-width: 150px; } }

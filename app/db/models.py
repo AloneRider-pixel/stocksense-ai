@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -93,3 +93,55 @@ class WatchlistItem(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
     )
+
+
+class ScannerBar(Base):
+    """Daily bars for the Nifty 500 scanner universe.
+
+    Kept separate from ``market_bars`` so the scanner's much larger universe
+    never touches the forecast/evaluation data.
+    """
+
+    __tablename__ = "scanner_bars"
+    __table_args__ = (UniqueConstraint("symbol", "date", name="uq_scanner_bars_symbol_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    date: Mapped[date] = mapped_column(Date)
+    high: Mapped[float] = mapped_column(Float)
+    low: Mapped[float] = mapped_column(Float)
+    close: Mapped[float] = mapped_column(Float)
+    volume: Mapped[int] = mapped_column(Integer)
+
+
+class ScannerRun(Base):
+    """One immutable observation run: when signals were computed and with what rules/data checks."""
+
+    __tablename__ = "scanner_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    as_of: Mapped[date] = mapped_column(Date, index=True)  # latest bar date used
+    origin: Mapped[str] = mapped_column(String(16))  # "forward" (live, prompt) or "retrospective"
+    origin_reason: Mapped[str] = mapped_column(String(160), default="")
+    entry_not_before: Mapped[date] = mapped_column(Date)  # entry = close of first session on/after this date
+    formula_version: Mapped[str] = mapped_column(String(32))
+    config: Mapped[str] = mapped_column(Text)  # JSON: RS and breakout parameters
+    excluded: Mapped[str] = mapped_column(Text)  # JSON: symbol -> reason, as of this run
+    universe_count: Mapped[int] = mapped_column(Integer)
+    ranked_count: Mapped[int] = mapped_column(Integer)
+
+
+class ScannerSignal(Base):
+    """Signal as observed in a run. Rows are only ever inserted, never edited or deleted."""
+
+    __tablename__ = "scanner_signals"
+    __table_args__ = (UniqueConstraint("run_id", "symbol", "kind", name="uq_scanner_signals_run"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("scanner_runs.id"), index=True)
+    source_bar_date: Mapped[date] = mapped_column(Date, index=True)
+    symbol: Mapped[str] = mapped_column(String(32))
+    kind: Mapped[str] = mapped_column(String(24))
+    close: Mapped[float] = mapped_column(Float)
+    inputs: Mapped[str] = mapped_column(Text)  # JSON snapshot of the numbers behind the signal

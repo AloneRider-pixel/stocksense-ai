@@ -5,6 +5,7 @@ import Brand from "./Brand";
 import PriceChart from "./PriceChart";
 import EquityChart from "./EquityChart";
 import PredActualChart from "./PredActualChart";
+import Scanner from "./Scanner";
 
 function fmtPct(v) {
   if (v == null) return "—";
@@ -202,6 +203,7 @@ export default function Dashboard({ user, onSignOut }) {
         <nav>
           <a className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>Overview</a>
           <a className={tab === "watchlist" ? "active" : ""} onClick={() => setTab("watchlist")}>Watchlist</a>
+          <a className={tab === "scanner" ? "active" : ""} onClick={() => setTab("scanner")}>Scanner</a>
           <a className={tab === "screener" ? "active" : ""} onClick={() => setTab("screener")}>Screener</a>
           <a className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>Prediction activity</a>
           <a className={tab === "evaluation" ? "active" : ""} onClick={() => setTab("evaluation")}>Model evaluation</a>
@@ -337,6 +339,8 @@ export default function Dashboard({ user, onSignOut }) {
             </div>
           </section>
         )}
+
+        {tab === "scanner" && <Scanner />}
 
         {tab === "screener" && (
           <section className="panel">
