@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
-from datetime import date
+import loggin
 
 import pandas as pd
 from sqlalchemy import delete, select
