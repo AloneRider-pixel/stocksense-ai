@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     market_data_symbols: str = "GOLD,SILVER,USDINR,EURINR,GBPINR,ADANIENT,ADANIPORTS,APOLLOHOSP,ASIANPAINT,AXISBANK,BAJAJ-AUTO,BAJAJFINSV,BAJFINANCE,BEL,BHARTIARTL,CIPLA,COALINDIA,DRREDDY,EICHERMOT,ETERNAL,GRASIM,HCLTECH,HDFCBANK,HDFCLIFE,HEROMOTOCO,HINDALCO,HINDUNILVR,ICICIBANK,INDUSINDBK,INFY,ITC,JIOFIN,JSWSTEEL,KOTAKBANK,LT,M&M,MARUTI,NESTLEIND,NTPC,ONGC,POWERGRID,RELIANCE,SBILIFE,SBIN,SHRIRAMFIN,SUNPHARMA,TATACONSUM,TATAMOTORS,TATASTEEL,TCS,TECHM,TITAN,TRENT,ULTRACEMCO,WIPRO"
     nse_symbols: str = ""
     market_data_refresh_hour: int = 22
+    scanner_enabled: bool = False  # all /scanner endpoints; off until data-provider terms are verified
+    scanner_refresh_enabled: bool = False  # in-app Nifty 500 download; off unless explicitly enabled
+    scanner_refresh_cooldown_minutes: int = 360
     market_data_refresh_minute: int = 30
 
     @model_validator(mode="after")
