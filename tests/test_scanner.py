@@ -173,7 +173,9 @@ def test_changes_flags_new_breakout_and_lost_level():
     lost = np.full(n, 100.0)
     lost[-3] = 105.0   # broke out 2 sessions ago ...
     lost[-2:] = 99.0   # ... and is now back under the level
-    vol = lambda spike: np.r_[np.full(n - 3, 1000.0), spike]
+    def vol(spike):
+        return np.r_[np.full(n - 3, 1000.0), spike]
+
     bars = {
         "FRESH": _bars(fresh, np.r_[np.full(n - 1, 1000.0), 3000.0]),
         "LOST": _bars(lost, vol([3000.0, 1000.0, 1000.0])),

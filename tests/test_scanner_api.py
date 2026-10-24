@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-import numpy as np
 import pytest
 
 import app.api.scanner_routes as scanner_routes
