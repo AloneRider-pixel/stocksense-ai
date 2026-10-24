@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import loggin
+import logging
 
 import pandas as pd
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from app.db.database import get_session
 from app.db.models import ScannerBar
