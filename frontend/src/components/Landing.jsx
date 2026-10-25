@@ -98,11 +98,11 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
           </button>
         </div>
         {IS_DEMO && (
-          <p className="hero-note">One click signs you into the shared demo account, no signup needed.</p>
+          <p className="hero-note">One click signs you in, no signup needed.</p>
         )}
         {demoError && <div className="error">{demoError}</div>}
         {warming && (
-          <p className="warmup-note">Waking up the free demo server, first load can take up to a minute…</p>
+          <p className="warmup-note">Waking up the server, first load can take up to a minute…</p>
         )}
 
         <div className="ticker-strip">
@@ -240,7 +240,7 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
         </div>
         <p>
           Research and engineering project. Not investment advice. Not a SEBI-registered research analyst or investment adviser. Past model performance does not indicate future results. Do not trade on this. Market data may be
-          delayed. Demo runs on free-tier hosting; the first load can take up to a minute
+          delayed. This site runs on free-tier hosting; the first load can take up to a minute
           while the instance wakes.
         </p>
         <p className="muted">
