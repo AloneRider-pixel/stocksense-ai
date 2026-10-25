@@ -29,8 +29,8 @@ router = APIRouter(prefix="/scanner", tags=["scanner"], dependencies=[Depends(re
 
 DISCLAIMER = (
     "Research and education only. Not investment advice; not a SEBI-registered research analyst. "
-    "Daily bars from Yahoo Finance via yfinance may be delayed or incomplete. Universe: NSE Indices "
-    "Nifty 500 constituent list snapshot; 'industry' is NSE's industry classification."
+    "Daily bars are delayed end-of-day data; the permitted live data source is still being set up. "
+    "Universe: NSE Indices Nifty 500 constituent list snapshot; 'industry' is NSE's industry classification."
 )
 _CACHE_TTL = 600.0
 _cache: dict[str, object] = {"data": None, "expires": 0.0, "excluded": {}}
