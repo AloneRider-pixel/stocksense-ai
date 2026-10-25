@@ -62,7 +62,7 @@ def _seed_demo_user(session) -> None:
         service.register(
             email=settings.demo_user_email,
             password=settings.demo_user_password,
-            full_name="Demo Reviewer",
+            full_name="Guest Reviewer",
         )
     except ValueError:
         pass  # demo account already exists

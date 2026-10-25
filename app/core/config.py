@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "json"  # "json" for aggregators, "text" for local dev
     demo_mode: bool = False
-    demo_user_email: str = "demo@stocksense.app"
+    demo_user_email: str = "reviewer@stocksense.app"
     demo_user_password: str = "Demo1234!"
     twelve_data_api_key: str = ""
     twelve_data_base_url: str = "https://api.twelvedata.com"
