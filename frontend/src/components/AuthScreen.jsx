@@ -69,7 +69,7 @@ export default function AuthScreen({ initialMode, busy, error, onSubmit, onDemo,
 
         {IS_DEMO && mode === "login" && (
           <button className="switch-auth" onClick={onDemo} disabled={busy}>
-            Just looking? Explore the demo account
+            Just looking? Explore the dashboard
           </button>
         )}
 
