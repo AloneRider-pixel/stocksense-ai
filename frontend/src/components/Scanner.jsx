@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
+import TradingViewChart from "./TradingViewChart";
 
 const pct = (v) => (v == null ? "—" : (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "%");
 const cls = (v) => ((v ?? 0) >= 0 ? "positive" : "negative");
@@ -32,7 +33,7 @@ export default function Scanner() {
   const [busy, setBusy] = useState(false);
 
   const loadCoverage = useCallback(async () => {
-    try { setCoverage(await api("/scanner/coverage")); } catch (e) { setError(e.message); }
+    try { const cov = await api("/scanner/coverage"); setCoverage(cov); return cov; } catch (e) { setError(e.message); return null; }
   }, []);
 
   const loadAll = useCallback(async () => {
@@ -50,7 +51,9 @@ export default function Scanner() {
     } catch (e) { setError(e.message); }
   }, [bo.lookback_days, bo.min_rel_volume]);
 
-  useEffect(() => { loadCoverage().then(loadAll); }, []); // eslint-disable-line
+  useEffect(() => {
+    loadCoverage().then((cov) => { if (cov && (cov.loading || cov.symbols_with_data > 0)) loadAll(); });
+  }, []); // eslint-disable-line
 
   async function startLoad() {
     setError("");
@@ -71,6 +74,8 @@ export default function Scanner() {
   }
   const set = (k) => (e) => setRule({ ...rule, [k]: e.target.value });
 
+  const dataPending = coverage && !coverage.loading && coverage.symbols_with_data === 0;
+
   return (
     <section className="panel scanner">
       <p className="eyebrow">NIFTY 500 SCANNER</p>
@@ -78,7 +83,7 @@ export default function Scanner() {
       <p className="muted small-print">
         Computed from delayed daily bars. Formulas are StockSense's own and shown on each view. Descriptive only, not advice or a prediction.
       </p>
-      {coverage && (
+      {coverage && !dataPending && (
         <p className="muted small-print" data-testid="coverage">
           Coverage: {coverage.symbols_with_data} of {coverage.universe_size} stocks loaded, {coverage.symbols_with_12m_history} with 12 months of history
           {coverage.as_of ? " · data through " + coverage.as_of : ""}
@@ -88,6 +93,27 @@ export default function Scanner() {
         </p>
       )}
       {error && <div className="error">{error}</div>}
+
+      {dataPending && (
+        <div className="panel" style={{ marginTop: 12 }}>
+          <h3>Scanner rankings aren't live yet</h3>
+          <p className="muted">
+            The scanner is built and tested, but StockSense doesn't yet have a permitted source for the
+            NSE daily data it computes from. Instead of showing sample or stale numbers, rankings stay
+            off until a licensed or permitted feed is connected.
+          </p>
+          <p className="muted">
+            Once connected you'll get: relative-strength ratings (1-99) across the Nifty 500, industry
+            rotation, breakout setups, a daily what-changed view, a forward-only signal scorecard, and
+            rule backtests with costs included.
+          </p>
+          <h3 style={{ marginTop: 16 }}>Market chart</h3>
+          <p className="muted small-print">
+            BSE data, end-of-day, by TradingView. Display only; it doesn't power the scanner rankings.
+          </p>
+          <TradingViewChart symbol="BSE:SENSEX" />
+        </div>
+      )}
 
       {breadth && (
         <div className="stat-grid">
@@ -118,11 +144,13 @@ export default function Scanner() {
         </aside>
       )}
 
-      <div className="pill-row">
-        {VIEWS.map(([k, label]) => (
-          <button key={k} className={"pill" + (view === k ? " active" : "")} onClick={() => setView(k)}>{label}</button>
-        ))}
-      </div>
+      {!dataPending && (
+        <div className="pill-row">
+          {VIEWS.map(([k, label]) => (
+            <button key={k} className={"pill" + (view === k ? " active" : "")} onClick={() => setView(k)}>{label}</button>
+          ))}
+        </div>
+      )}
 
       {view === "rs" && rs && (
         <>
