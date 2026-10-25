@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.routes import router
+from app.api.scanner_routes import router as scanner_router
 from app.auth.routes import router as auth_router
 from app.core.config import settings
 from app.core.logging_config import configure_logging
@@ -113,3 +114,4 @@ def readiness() -> dict[str, object]:
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(router, prefix="/api/v1")
+app.include_router(scanner_router, prefix="/api/v1")
