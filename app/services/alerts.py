@@ -7,12 +7,16 @@ baseline:
 - above: previous close < target <= latest close
 - below: previous close > target >= latest close
 
-With a single stored bar there is no baseline; the rule fires if the
-close is already past the target in the direction (above: close >=
-target, below: close <= target). A rule never fires twice for the same
-bar date (last_triggered_bar_date), so a re-run of ingestion for the
-same day does not duplicate notifications. Firing does not deactivate
-the rule: it re-arms for the next crossing on a newer bar.
+A crossing needs two consecutive closes; a lone bar never fires a rule.
+Creating a rule sets its baseline (last_triggered_bar_date) to the
+symbol's latest stored bar date, so historical prices that are already
+past the target never fire as a "new" crossing - only bars newer than
+the baseline can fire. A rule never fires twice for the same bar date,
+so repeated or retried ingestion for the same day does not duplicate
+notifications, and the rules are locked with SELECT ... FOR UPDATE
+during evaluation so concurrent ingestions of the same symbol cannot
+double-fire either. Firing does not deactivate the rule: it re-arms
+for the next crossing on a newer bar.
 
 Evaluation reads stored bars only - it never calls a market data
 provider. Delivery goes through the Notifier seam; the default is
@@ -20,6 +24,7 @@ LogNotifier (log-only, no email) until external delivery is approved."""
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -50,17 +55,16 @@ class AlertService:
         """Return the triggering (bar_date, close) or None."""
         if not bars:
             return None
+        if len(bars) < 2:
+            return None  # a lone bar has no baseline and never fires
         bar_date, close = bars[0]
         close = Decimal(close)
         target = Decimal(rule.target_price)
-        if len(bars) >= 2:
-            prev_close = Decimal(bars[1][1])
-            if rule.direction == "above":
-                hit = prev_close < target <= close
-            else:
-                hit = prev_close > target >= close
+        prev_close = Decimal(bars[1][1])
+        if rule.direction == "above":
+            hit = prev_close < target <= close
         else:
-            hit = close >= target if rule.direction == "above" else close <= target
+            hit = prev_close > target >= close
         if not hit:
             return None
         if rule.last_triggered_bar_date is not None and rule.last_triggered_bar_date >= bar_date:
@@ -69,9 +73,13 @@ class AlertService:
 
     def evaluate_symbol(self, symbol: str) -> int:
         """Evaluate all active rules for one symbol. Returns triggers fired."""
-        stmt = select(AlertRule).where(
-            AlertRule.symbol == symbol,
-            AlertRule.active.is_(True),
+        stmt = (
+            select(AlertRule)
+            .where(
+                AlertRule.symbol == symbol,
+                AlertRule.active.is_(True),
+            )
+            .with_for_update()
         )
         rules = list(self.session.execute(stmt).scalars().all())
         if not rules:
@@ -105,3 +113,46 @@ class AlertService:
         if fired:
             self.session.commit()
         return fired
+
+
+class AlertInputError(ValueError):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def latest_bar_date(session: Session, symbol: str) -> date | None:
+    stmt = (
+        select(MarketBarRecord.date)
+        .where(MarketBarRecord.symbol == symbol)
+        .order_by(MarketBarRecord.date.desc())
+        .limit(1)
+    )
+    return session.execute(stmt).scalars().first()
+
+
+def create_rule(
+    session: Session, user_id: int, symbol: str, direction: str, target_price: Decimal
+) -> AlertRule:
+    from app.market_data.symbols import lookup_symbol
+
+    normalized = symbol.strip().upper()
+    if direction not in ("above", "below"):
+        raise AlertInputError("BAD_DIRECTION", "direction must be 'above' or 'below'")
+    if target_price <= 0:
+        raise AlertInputError("BAD_TARGET", "target price must be positive")
+    if lookup_symbol(normalized) is None:
+        raise AlertInputError("UNKNOWN_SYMBOL", f"unknown symbol: {normalized}")
+    # Baseline at creation: history already past the target must never
+    # fire as a new crossing, so mark the latest stored bar as seen.
+    rule = AlertRule(
+        user_id=user_id,
+        symbol=normalized,
+        direction=direction,
+        target_price=target_price,
+        active=True,
+        last_triggered_bar_date=latest_bar_date(session, normalized),
+    )
+    session.add(rule)
+    session.commit()
+    return rule

@@ -26,9 +26,12 @@ def _ingest_symbol(symbol: str) -> dict[str, int | str]:
         result = service.ingest(symbol, limit=settings.market_data_max_rows)
         try:
             result["alerts_triggered"] = AlertService(session).evaluate_symbol(symbol)
-        except Exception:  # alert evaluation must never break ingestion
+        except Exception:
+            # Log and re-raise so arq retries the job: alert failures must
+            # stay observable and retryable, never silently dropped. The
+            # per-bar dedupe keeps a retried ingest from double-notifying.
             logger.exception("alert evaluation failed for %s", symbol)
-            result["alerts_triggered"] = 0
+            raise
         return result
     finally:
         session.close()

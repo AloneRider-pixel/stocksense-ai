@@ -114,31 +114,29 @@ def test_below_no_crossing_when_both_below(session_factory):
     assert service.evaluate_symbol("RELIANCE") == 0
 
 
-def test_single_bar_fallback_fires_when_already_past_target(session_factory):
+def test_single_bar_never_fires(session_factory):
     session = session_factory()
     user = _user(session)
     _rule(session, user, direction="above", target="2500")
+    # no baseline: a lone bar already past the target must not fire
     _bars(session, "RELIANCE", [(date(2026, 10, 30), 2600)])
-    service, _ = _service(session)
-    assert service.evaluate_symbol("RELIANCE") == 1
+    service, notifier = _service(session)
+    assert service.evaluate_symbol("RELIANCE") == 0
+    assert db_count(session) == 0
+    assert notifier.sent == []
 
 
-def test_single_bar_fallback_below(session_factory):
+def test_single_bar_never_fires_below(session_factory):
     session = session_factory()
     user = _user(session)
     _rule(session, user, direction="below", target="2500")
     _bars(session, "RELIANCE", [(date(2026, 10, 30), 2400)])
     service, _ = _service(session)
-    assert service.evaluate_symbol("RELIANCE") == 1
-
-
-def test_single_bar_fallback_no_fire_when_short_of_target(session_factory):
-    session = session_factory()
-    user = _user(session)
-    _rule(session, user, direction="above", target="2500")
-    _bars(session, "RELIANCE", [(date(2026, 10, 30), 2400)])
-    service, _ = _service(session)
     assert service.evaluate_symbol("RELIANCE") == 0
+
+
+def db_count(session):
+    return session.query(Notification).count()
 
 
 def test_no_duplicate_fire_for_same_bar(session_factory):
@@ -209,3 +207,93 @@ def test_multiple_users_independent(session_factory):
     note = session.query(Notification).one()
     assert note.user_id == user1.id
     assert notifier.sent[0]["user_id"] == user1.id
+
+
+def test_threshold_equality_above_fires_on_close_equal_target(session_factory):
+    session = session_factory()
+    user = _user(session)
+    _rule(session, user, direction="above", target="2500")
+    # prev 2450 < 2500 <= close 2500 -> fires (close equal to target counts)
+    _bars(session, "RELIANCE", [(date(2026, 10, 29), 2450), (date(2026, 10, 30), 2500)])
+    service, _ = _service(session)
+    assert service.evaluate_symbol("RELIANCE") == 1
+
+
+def test_threshold_equality_above_prev_equal_target_does_not_fire(session_factory):
+    session = session_factory()
+    user = _user(session)
+    _rule(session, user, direction="above", target="2500")
+    # prev 2500 is not < target -> no crossing even though close 2510 > target
+    _bars(session, "RELIANCE", [(date(2026, 10, 29), 2500), (date(2026, 10, 30), 2510)])
+    service, _ = _service(session)
+    assert service.evaluate_symbol("RELIANCE") == 0
+
+
+def test_threshold_equality_below_fires_on_close_equal_target(session_factory):
+    session = session_factory()
+    user = _user(session)
+    _rule(session, user, direction="below", target="2500")
+    # prev 2550 > 2500 >= close 2500 -> fires
+    _bars(session, "RELIANCE", [(date(2026, 10, 29), 2550), (date(2026, 10, 30), 2500)])
+    service, _ = _service(session)
+    assert service.evaluate_symbol("RELIANCE") == 1
+
+
+def test_threshold_equality_below_prev_equal_target_does_not_fire(session_factory):
+    session = session_factory()
+    user = _user(session)
+    _rule(session, user, direction="below", target="2500")
+    _bars(session, "RELIANCE", [(date(2026, 10, 29), 2500), (date(2026, 10, 30), 2490)])
+    service, _ = _service(session)
+    assert service.evaluate_symbol("RELIANCE") == 0
+
+
+def test_rule_created_after_history_does_not_backfill(session_factory):
+    session = session_factory()
+    user = _user(session)
+    # history already past the target before the rule exists
+    _bars(session, "RELIANCE", [(date(2026, 10, 29), 2450), (date(2026, 10, 30), 2600)])
+    from app.services.alerts import create_rule
+
+    rule = create_rule(
+        session, user_id=user.id, symbol="RELIANCE", direction="above",
+        target_price=Decimal("2500"),
+    )
+    assert rule.last_triggered_bar_date == date(2026, 10, 30)  # baseline at creation
+    service, notifier = _service(session)
+    assert service.evaluate_symbol("RELIANCE") == 0  # no backfilled "crossing"
+    assert db_count(session) == 0
+    assert notifier.sent == []
+
+
+def test_rule_created_after_history_fires_only_on_newer_crossing(session_factory):
+    session = session_factory()
+    user = _user(session)
+    _bars(session, "RELIANCE", [(date(2026, 10, 29), 2450), (date(2026, 10, 30), 2600)])
+    from app.services.alerts import create_rule
+
+    create_rule(
+        session, user_id=user.id, symbol="RELIANCE", direction="above",
+        target_price=Decimal("2700"),
+    )
+    service, _ = _service(session)
+    assert service.evaluate_symbol("RELIANCE") == 0
+    # newer bars cross the 2700 target -> fires once
+    _bars(session, "RELIANCE", [(date(2026, 10, 31), 2650), (date(2026, 11, 2), 2710)])
+    assert service.evaluate_symbol("RELIANCE") == 1
+    assert db_count(session) == 1
+
+
+def test_create_rule_validation(session_factory):
+    session = session_factory()
+    user = _user(session)
+    import pytest
+
+    from app.services.alerts import AlertInputError, create_rule
+
+    with pytest.raises(AlertInputError):
+        create_rule(session, user_id=user.id, symbol="RELIANCE", direction="up", target_price=Decimal("100"))
+    with pytest.raises(AlertInputError):
+        create_rule(session, user_id=user.id, symbol="RELIANCE", direction="above", target_price=Decimal("0"))
+    with pytest.raises(AlertInputError):
+        create_rule(session, user_id=user.id, symbol="NOPE123", direction="above", target_price=Decimal("100"))
