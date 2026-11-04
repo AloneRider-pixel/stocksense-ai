@@ -164,3 +164,40 @@ def create_rule(
     session.add(rule)
     session.commit()
     return rule
+
+
+def list_rules(session: Session, user_id: int) -> list[AlertRule]:
+    stmt = (
+        select(AlertRule)
+        .where(AlertRule.user_id == user_id)
+        .order_by(AlertRule.created_at.desc())
+    )
+    return list(session.execute(stmt).scalars().all())
+
+
+def deactivate_rule(session: Session, user_id: int, rule_id: int) -> AlertRule:
+    rule = session.get(AlertRule, rule_id)
+    if rule is None or rule.user_id != user_id:
+        raise AlertInputError("NOT_FOUND", "alert rule not found")
+    rule.active = False
+    session.commit()
+    return rule
+
+
+def list_notifications(session: Session, user_id: int) -> list[Notification]:
+    stmt = (
+        select(Notification)
+        .where(Notification.user_id == user_id)
+        .order_by(Notification.created_at.desc())
+        .limit(100)
+    )
+    return list(session.execute(stmt).scalars().all())
+
+
+def mark_notification_seen(session: Session, user_id: int, notification_id: int) -> Notification:
+    note = session.get(Notification, notification_id)
+    if note is None or note.user_id != user_id:
+        raise AlertInputError("NOT_FOUND", "notification not found")
+    note.seen = True
+    session.commit()
+    return note

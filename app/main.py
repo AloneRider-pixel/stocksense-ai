@@ -7,6 +7,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.routes import router
 from app.api.scanner_routes import router as scanner_router
+from app.api.alert_routes import router as alert_router
 from app.api.wallet_routes import router as wallet_router
 from app.auth.routes import router as auth_router
 from app.core.config import settings
@@ -117,3 +118,4 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(router, prefix="/api/v1")
 app.include_router(scanner_router, prefix="/api/v1")
 app.include_router(wallet_router, prefix="/api/v1")
+app.include_router(alert_router, prefix="/api/v1")
