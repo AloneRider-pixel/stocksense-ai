@@ -61,8 +61,10 @@ def test_create_rule_sets_baseline_from_latest_bar(client, auth_headers, session
         headers=headers,
     )
     assert response.status_code == 201
-    # history already past target -> baseline pinned to latest bar, no backfill
-    assert response.json()["last_triggered_bar_date"] == "2026-10-30"
+    # history already past target -> baseline pinned to latest bar, no backfill,
+    # and the baseline is not presented as a trigger
+    assert response.json()["baseline_bar_date"] == "2026-10-30"
+    assert response.json()["last_triggered_bar_date"] is None
 
 
 def test_create_rule_rejects_bad_input(client, auth_headers):

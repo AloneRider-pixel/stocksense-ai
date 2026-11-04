@@ -37,6 +37,9 @@ def _rule_payload(rule) -> dict[str, object]:
         "direction": rule.direction,
         "target_price": str(rule.target_price),
         "active": rule.active,
+        "baseline_bar_date": (
+            rule.baseline_bar_date.isoformat() if rule.baseline_bar_date else None
+        ),
         "last_triggered_bar_date": (
             rule.last_triggered_bar_date.isoformat() if rule.last_triggered_bar_date else None
         ),
