@@ -641,7 +641,7 @@ aside nav a.active, aside nav a:hover { color: #edf4ff; background: #13223c; tex
 .negative { color: #ff8d8d; }
 .table.positions-grid .row, .table-head.positions-grid { grid-template-columns: 1.1fr .5fr .9fr 1.1fr .9fr 1fr 1fr; }
 .table.orders-grid .row, .table-head.orders-grid { grid-template-columns: 1.4fr .8fr .5fr .5fr 1.2fr 1.2fr; }
-.table.alerts-grid .row, .table-head.alerts-grid { grid-template-columns: 1fr 1.2fr .8fr 1fr .8fr; }
+.table.alerts-grid .row, .table-head.alerts-grid { grid-template-columns: .9fr 1fr .7fr 1fr 1fr .8fr; }
 .header-side { display: flex; align-items: center; gap: 12px; }
 .bell-wrap { position: relative; }
 .bell {
