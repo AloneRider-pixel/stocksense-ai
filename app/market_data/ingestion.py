@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pandas as pd
 
 from app.db.repository import MarketDataRepository, PredictionRepository
 from app.market_data.base import MarketDataProvider
 from app.market_data.service import MarketDataService
+
+IST = ZoneInfo("Asia/Kolkata")
 
 
 class MarketDataIngestionService:
@@ -20,6 +25,8 @@ class MarketDataIngestionService:
 
     def ingest(self, symbol: str, limit: int = 500) -> dict[str, int | str]:
         bars = self.market_data.history(symbol, limit=limit)
+        today = datetime.now(IST).date()
+        bars = [bar for bar in bars if pd.Timestamp(bar.date).date() <= today]
         inserted = self.repository.upsert_many(
             [
                 {

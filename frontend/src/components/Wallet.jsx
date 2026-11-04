@@ -24,7 +24,8 @@ function EquitySpark({ points }) {
       </svg>
       <p className="muted">
         {points.length} snapshots · {inr(points[0].equity)} → {inr(points[points.length - 1].equity)}
-        {" ·"}last bar {points[points.length - 1].as_of || "—"}
+        {" ·"}valued at settled closes as of {points[points.length - 1].as_of || "—"}.
+        Recorded at fills and after each daily ingest.
       </p>
     </div>
   );

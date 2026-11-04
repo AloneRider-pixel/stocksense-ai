@@ -32,15 +32,21 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import AlertRule, MarketBarRecord, Notification
+from app.services.bar_eligibility import max_eligible_bar_date
 from app.services.notifications import Notifier, get_notifier
 
 ALERT_KIND = "price_alert"
 
 
-def _recent_closes(session: Session, symbol: str, limit: int = 2) -> list[tuple]:
+def _recent_closes(session: Session, symbol: str, limit: int = 2, now=None) -> list[tuple]:
+    # Only bars eligible as completed closes: never future-dated, never
+    # a not-yet-settled same-day bar.
     stmt = (
         select(MarketBarRecord.date, MarketBarRecord.close)
-        .where(MarketBarRecord.symbol == symbol)
+        .where(
+            MarketBarRecord.symbol == symbol,
+            MarketBarRecord.date <= max_eligible_bar_date(now),
+        )
         .order_by(MarketBarRecord.date.desc())
         .limit(limit)
     )
@@ -48,9 +54,10 @@ def _recent_closes(session: Session, symbol: str, limit: int = 2) -> list[tuple]
 
 
 class AlertService:
-    def __init__(self, session: Session, notifier: Notifier | None = None) -> None:
+    def __init__(self, session: Session, notifier: Notifier | None = None, now=None) -> None:
         self.session = session
         self.notifier = notifier or get_notifier()
+        self._now = now
 
     def _crossed(self, rule: AlertRule, bars: list[tuple]) -> tuple | None:
         """Return the triggering (bar_date, close) or None."""
@@ -89,7 +96,7 @@ class AlertService:
         rules = list(self.session.execute(stmt).scalars().all())
         if not rules:
             return 0
-        bars = _recent_closes(self.session, symbol)
+        bars = _recent_closes(self.session, symbol, now=self._now)
         fired = 0
         for rule in rules:
             crossing = self._crossed(rule, bars)

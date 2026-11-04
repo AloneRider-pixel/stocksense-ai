@@ -29,6 +29,7 @@ from app.db.models import (
     PaperPosition,
 )
 from app.market_data.symbols import lookup_symbol, nifty50_symbols
+from app.services.bar_eligibility import max_eligible_bar_date
 
 STARTING_CASH = Decimal("1000000.00")  # ₹10,00,000 of virtual money
 PAISE = Decimal("0.01")
@@ -62,8 +63,12 @@ def _price(value: Decimal) -> Decimal:
 
 
 class WalletService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, now: datetime | None = None) -> None:
         self.session = session
+        self._now = now
+
+    def _max_bar_date(self):
+        return max_eligible_bar_date(self._now)
 
     def get_or_create_account(self, user_id: int) -> PaperAccount:
         account = (
@@ -95,18 +100,28 @@ class WalletService:
         return account
 
     def _latest_bar(self, symbol: str) -> MarketBarRecord | None:
+        """Latest bar eligible to act as a completed close.
+
+        Future-dated and not-yet-settled same-day bars never qualify,
+        so fills and valuations cannot use a price that is not final."""
         return (
             self.session.query(MarketBarRecord)
-            .filter(MarketBarRecord.symbol == symbol)
+            .filter(
+                MarketBarRecord.symbol == symbol,
+                MarketBarRecord.date <= self._max_bar_date(),
+            )
             .order_by(MarketBarRecord.date.desc())
             .first()
         )
 
     def _latest_ingested_trading_day(self):
-        """Most recent bar date across the NIFTY 50 equity universe."""
+        """Most recent eligible close date across the NIFTY 50 universe."""
         return (
             self.session.query(func.max(MarketBarRecord.date))
-            .filter(MarketBarRecord.symbol.in_(nifty50_symbols()))
+            .filter(
+                MarketBarRecord.symbol.in_(nifty50_symbols()),
+                MarketBarRecord.date <= self._max_bar_date(),
+            )
             .scalar()
         )
 
@@ -140,7 +155,11 @@ class WalletService:
         account = (
             self.session.query(PaperAccount)
             .filter(PaperAccount.id == account.id)
+            # populate_existing is load-bearing: without it SQLAlchemy keeps
+            # the pre-lock attribute values and concurrent orders lose updates
+            # even though Postgres serializes the row lock.
             .with_for_update()
+            .populate_existing()
             .one()
         )
 
@@ -193,6 +212,7 @@ class WalletService:
                 PaperPosition.symbol == normalized_symbol,
             )
             .with_for_update()
+            .populate_existing()
             .one_or_none()
         )
 
@@ -349,6 +369,52 @@ class WalletService:
             .limit(limit)
             .all()
         )
+
+    def snapshot_holders(self, symbol: str) -> int:
+        """Record equity snapshots for accounts holding a freshly ingested symbol.
+
+        Called by the ingestion worker after new bars land, so the equity
+        curve moves with normal daily ingestion and stays consistent with
+        the wallet summary card. One snapshot per account per bar date:
+        re-ingesting the same day is a no-op. Valuation uses only
+        eligible closes via _positions_value."""
+        accounts = (
+            self.session.query(PaperPosition.account_id)
+            .filter(PaperPosition.symbol == symbol, PaperPosition.quantity > 0)
+            .distinct()
+            .all()
+        )
+        created = 0
+        for (account_id,) in accounts:
+            account = self.session.get(PaperAccount, account_id)
+            if account is None:
+                continue
+            positions_value, as_of = self._positions_value(account)
+            if as_of is None:
+                continue
+            existing = (
+                self.session.query(PaperEquitySnapshot)
+                .filter(
+                    PaperEquitySnapshot.account_id == account_id,
+                    PaperEquitySnapshot.as_of == as_of,
+                )
+                .first()
+            )
+            if existing is not None:
+                continue
+            equity = _money(Decimal(account.cash) + positions_value)
+            self.session.add(
+                PaperEquitySnapshot(
+                    account_id=account_id,
+                    at=datetime.now(timezone.utc),
+                    equity=equity,
+                    as_of=as_of,
+                )
+            )
+            created += 1
+        if created:
+            self.session.commit()
+        return created
 
     def equity_history(self, user_id: int, limit: int = 500) -> list[PaperEquitySnapshot]:
         account = self.get_or_create_account(user_id)

@@ -25,6 +25,7 @@ from app.market_data.yfinance_provider import YFinanceError
 from app.services.indicators import compute_indicators
 from app.services.screener import screen_universe
 from app.market_data.ingestion import MarketDataIngestionService
+from app.services.post_ingest import run_post_ingest
 from app.market_data.twelve_data import TwelveDataError
 from app.services.cache import PredictionCache
 from app.services.predictor import Predictor
@@ -383,6 +384,7 @@ def backtest_symbol(
 
 
 def _ingest_symbol(symbol: str, limit: int) -> dict[str, int | str]:
+    symbol = symbol.strip().upper()
     session = get_session()
     try:
         repository = MarketDataRepository(session)
@@ -392,7 +394,11 @@ def _ingest_symbol(symbol: str, limit: int) -> dict[str, int | str]:
             repository,
             prediction_repository,
         )
-        return service.ingest(symbol, limit=limit)
+        result = service.ingest(symbol, limit=limit)
+        # Same post-ingest hooks as the worker: failures propagate so the
+        # caller can retry; dedupe makes retries safe.
+        result.update(run_post_ingest(session, symbol))
+        return result
     finally:
         session.close()
 
