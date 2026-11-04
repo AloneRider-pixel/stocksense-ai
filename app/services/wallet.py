@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -74,7 +74,16 @@ class WalletService:
         if account is None:
             account = PaperAccount(user_id=user_id, cash=STARTING_CASH)
             self.session.add(account)
-            self.session.commit()
+            try:
+                self.session.commit()
+            except IntegrityError:
+                # A concurrent request created the same account first.
+                self.session.rollback()
+                account = (
+                    self.session.query(PaperAccount)
+                    .filter(PaperAccount.user_id == user_id)
+                    .one()
+                )
         return account
 
     def reset(self, user_id: int) -> PaperAccount:
@@ -127,6 +136,13 @@ class WalletService:
         client_order_id: str | None = None,
     ) -> PaperOrder:
         account = self.get_or_create_account(user_id)
+        # Lock the account row so concurrent orders serialize on Postgres.
+        account = (
+            self.session.query(PaperAccount)
+            .filter(PaperAccount.id == account.id)
+            .with_for_update()
+            .one()
+        )
 
         if client_order_id:
             existing = (
@@ -176,6 +192,7 @@ class WalletService:
                 PaperPosition.account_id == account.id,
                 PaperPosition.symbol == normalized_symbol,
             )
+            .with_for_update()
             .one_or_none()
         )
 
@@ -220,6 +237,22 @@ class WalletService:
         self._snapshot_equity(account)
         try:
             self.session.commit()
+        except IntegrityError:
+            # Lost a concurrent client_order_id race: the other request's
+            # order won, so return it instead of double-filling.
+            self.session.rollback()
+            if client_order_id:
+                existing = (
+                    self.session.query(PaperOrder)
+                    .filter(
+                        PaperOrder.account_id == account.id,
+                        PaperOrder.client_order_id == client_order_id,
+                    )
+                    .one_or_none()
+                )
+                if existing is not None:
+                    return existing
+            raise
         except SQLAlchemyError:
             self.session.rollback()
             raise

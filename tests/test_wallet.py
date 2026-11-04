@@ -253,3 +253,31 @@ def test_fill_records_equity_snapshot(session_factory):
     # equity right after the fill = 999000 cash + 1000 market value
     assert Decimal(snapshots[0].equity) == Decimal("1000000.00")
     assert snapshots[0].as_of == date(2026, 10, 30)
+
+
+def test_client_order_id_race_returns_existing_order(session_factory, monkeypatch):
+    from sqlalchemy.exc import IntegrityError as SAIntegrityError
+
+    session = session_factory()
+    user = _user(session)
+    _bar(session, "RELIANCE", date(2026, 10, 30), 100.0)
+    service = WalletService(session)
+    winner = service.place_order(user.id, "RELIANCE", "buy", 10, client_order_id="race-1")
+
+    real_commit = session.commit
+    calls = {"n": 0}
+
+    def flaky_commit():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise SAIntegrityError("INSERT INTO paper_orders ...", {}, Exception("dup"))
+
+    monkeypatch.setattr(session, "commit", flaky_commit)
+
+    loser = service.place_order(user.id, "RELIANCE", "buy", 10, client_order_id="race-1")
+
+    assert loser.id == winner.id
+    monkeypatch.setattr(session, "commit", real_commit)
+    summary = service.summary(user.id)
+    assert summary["cash"] == "999000.00"
+    assert summary["positions"][0]["quantity"] == 10
