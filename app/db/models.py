@@ -232,3 +232,42 @@ class PaperEquitySnapshot(Base):
     equity: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     as_of: Mapped[date | None] = mapped_column(Date, nullable=True)
 
+
+
+class AlertRule(Base):
+    __tablename__ = "alert_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    direction: Mapped[str] = mapped_column(String(5))
+    target_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    last_triggered_bar_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    seen: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )

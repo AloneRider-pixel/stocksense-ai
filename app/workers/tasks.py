@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from arq import Retry
 
@@ -9,6 +10,9 @@ from app.db.database import get_session
 from app.db.repository import MarketDataRepository, PredictionRepository
 from app.market_data.factory import get_market_data_provider
 from app.market_data.ingestion import MarketDataIngestionService
+from app.services.alerts import AlertService
+
+logger = logging.getLogger(__name__)
 
 
 def _ingest_symbol(symbol: str) -> dict[str, int | str]:
@@ -19,7 +23,13 @@ def _ingest_symbol(symbol: str) -> dict[str, int | str]:
             repository=MarketDataRepository(session),
             prediction_repository=PredictionRepository(session),
         )
-        return service.ingest(symbol, limit=settings.market_data_max_rows)
+        result = service.ingest(symbol, limit=settings.market_data_max_rows)
+        try:
+            result["alerts_triggered"] = AlertService(session).evaluate_symbol(symbol)
+        except Exception:  # alert evaluation must never break ingestion
+            logger.exception("alert evaluation failed for %s", symbol)
+            result["alerts_triggered"] = 0
+        return result
     finally:
         session.close()
 
