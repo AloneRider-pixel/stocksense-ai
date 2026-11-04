@@ -70,7 +70,7 @@ def test_above_crossing_fires(session_factory):
     assert notifications[0].user_id == user.id
     assert notifications[0].kind == "price_alert"
     assert notifications[0].seen is False
-    assert "2510" in notifications[0].body
+    assert "2,510.00" in notifications[0].body
     assert len(notifier.sent) == 1
 
 
@@ -259,7 +259,9 @@ def test_rule_created_after_history_does_not_backfill(session_factory):
         session, user_id=user.id, symbol="RELIANCE", direction="above",
         target_price=Decimal("2500"),
     )
-    assert rule.last_triggered_bar_date == date(2026, 10, 30)  # baseline at creation
+    # baseline is pinned for evaluation, but it is not a trigger
+    assert rule.baseline_bar_date == date(2026, 10, 30)
+    assert rule.last_triggered_bar_date is None
     service, notifier = _service(session)
     assert service.evaluate_symbol("RELIANCE") == 0  # no backfilled "crossing"
     assert db_count(session) == 0
@@ -297,3 +299,33 @@ def test_create_rule_validation(session_factory):
         create_rule(session, user_id=user.id, symbol="RELIANCE", direction="above", target_price=Decimal("0"))
     with pytest.raises(AlertInputError):
         create_rule(session, user_id=user.id, symbol="NOPE123", direction="above", target_price=Decimal("100"))
+
+
+def test_last_triggered_set_only_on_actual_fire(session_factory):
+    session = session_factory()
+    user = _user(session)
+    _bars(session, "RELIANCE", [(date(2026, 10, 29), 2450), (date(2026, 10, 30), 2510)])
+    from app.services.alerts import create_rule
+
+    rule = create_rule(
+        session, user_id=user.id, symbol="RELIANCE", direction="above",
+        target_price=Decimal("2600"),
+    )
+    assert rule.last_triggered_bar_date is None
+    _bars(session, "RELIANCE", [(date(2026, 10, 31), 2550), (date(2026, 11, 2), 2610)])
+    service, _ = _service(session)
+    assert service.evaluate_symbol("RELIANCE") == 1
+    session.refresh(rule)
+    assert rule.last_triggered_bar_date == date(2026, 11, 2)
+
+
+def test_notification_text_uses_two_decimal_prices(session_factory):
+    session = session_factory()
+    user = _user(session)
+    _rule(session, user, direction="above", target="2500")
+    _bars(session, "RELIANCE", [(date(2026, 10, 29), 2450), (date(2026, 10, 30), 2510)])
+    service, _ = _service(session)
+    assert service.evaluate_symbol("RELIANCE") == 1
+    note = session.query(Notification).one()
+    assert "2,500.00" in note.title
+    assert "2,510.00" in note.body

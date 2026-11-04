@@ -8,15 +8,16 @@ baseline:
 - below: previous close > target >= latest close
 
 A crossing needs two consecutive closes; a lone bar never fires a rule.
-Creating a rule sets its baseline (last_triggered_bar_date) to the
-symbol's latest stored bar date, so historical prices that are already
-past the target never fire as a "new" crossing - only bars newer than
-the baseline can fire. A rule never fires twice for the same bar date,
-so repeated or retried ingestion for the same day does not duplicate
-notifications, and the rules are locked with SELECT ... FOR UPDATE
-during evaluation so concurrent ingestions of the same symbol cannot
-double-fire either. Firing does not deactivate the rule: it re-arms
-for the next crossing on a newer bar.
+Creating a rule pins its baseline_bar_date to the symbol's latest stored
+bar, so historical prices that are already past the target never fire as
+a "new" crossing - only bars newer than the baseline can fire. The
+baseline is bookkeeping, not a trigger: last_triggered_bar_date stays
+empty until the rule actually fires. A rule never fires twice for the
+same bar date, so repeated or retried ingestion for the same day does
+not duplicate notifications, and the rules are locked with
+SELECT ... FOR UPDATE during evaluation so concurrent ingestions of the
+same symbol cannot double-fire either. Firing does not deactivate the
+rule: it re-arms for the next crossing on a newer bar.
 
 Evaluation reads stored bars only - it never calls a market data
 provider. Delivery goes through the Notifier seam; the default is
@@ -67,7 +68,11 @@ class AlertService:
             hit = prev_close > target >= close
         if not hit:
             return None
-        if rule.last_triggered_bar_date is not None and rule.last_triggered_bar_date >= bar_date:
+        gate = max(
+            (d for d in (rule.baseline_bar_date, rule.last_triggered_bar_date) if d is not None),
+            default=None,
+        )
+        if gate is not None and gate >= bar_date:
             return None
         return bar_date, close
 
@@ -92,10 +97,11 @@ class AlertService:
                 continue
             bar_date, close = crossing
             rule.last_triggered_bar_date = bar_date
-            title = f"{symbol} crossed {rule.direction} {rule.target_price}"
+            target_text = f"{Decimal(rule.target_price):,.2f}"
+            title = f"{symbol} crossed {rule.direction} {target_text}"
             body = (
-                f"{symbol} closed at {close} on {bar_date}, crossing "
-                f"{rule.direction} your alert target of {rule.target_price}. "
+                f"{symbol} closed at {close:,.2f} on {bar_date}, crossing "
+                f"{rule.direction} your alert target of {target_text}. "
                 "This is a simulated alert on stored daily closes, not "
                 "investment advice."
             )
@@ -144,14 +150,16 @@ def create_rule(
     if lookup_symbol(normalized) is None:
         raise AlertInputError("UNKNOWN_SYMBOL", f"unknown symbol: {normalized}")
     # Baseline at creation: history already past the target must never
-    # fire as a new crossing, so mark the latest stored bar as seen.
+    # fire as a new crossing, so evaluation starts after the latest
+    # stored bar. This is not a trigger - last_triggered_bar_date stays
+    # empty until the rule actually fires.
     rule = AlertRule(
         user_id=user_id,
         symbol=normalized,
         direction=direction,
         target_price=target_price,
         active=True,
-        last_triggered_bar_date=latest_bar_date(session, normalized),
+        baseline_bar_date=latest_bar_date(session, normalized),
     )
     session.add(rule)
     session.commit()

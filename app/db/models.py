@@ -246,6 +246,7 @@ class AlertRule(Base):
     direction: Mapped[str] = mapped_column(String(5))
     target_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    baseline_bar_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     last_triggered_bar_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

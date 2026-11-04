@@ -39,6 +39,9 @@ The demo serves real daily market data (Yahoo Finance for NSE equities, the NIFT
 
 ## Honest limits
 
+- **Paper trading is a simulation:** fills use stored daily closes, not live quotes; there is no slippage, liquidity, or intraday execution model. It is practice software, not a trading system.
+- **Alerts are not real-time:** they evaluate only when new daily bars are ingested and only on close-to-close crossings. They can fire late or not at all if ingestion stalls, and they are not investment advice.
+
 - **Free-tier hosting:** the demo sleeps when idle; first load can take up to a minute while the instance wakes.
 - **Demo, not production:** the deployed instance handles demo traffic only; nothing here is load-tested for production use.
 - **Backtest assumptions disclosed:** walk-forward out-of-sample, long/flat, no transaction costs, no shorting, no leverage. Past performance does not guarantee future results.
@@ -55,6 +58,18 @@ The demo serves real daily market data (Yahoo Finance for NSE equities, the NIFT
 - India-first instrument registry: NIFTY 50 constituents, the NIFTY 50 index, spot gold/silver, and USD/INR, EUR/INR, GBP/INR pairs (INR, Asia/Kolkata, NSE holiday calendar).
 - Public accuracy endpoint and landing-page track record comparing live tracked forecasts against last-close persistence and the NIFTY 50 index over the same windows.
 - Walk-forward backtest view: long/flat model strategy vs buy-and-hold equity curve with max drawdown, assumptions disclosed.
+- Paper-trading wallet (simulated only): virtual INR cash, market orders filled at stored daily closes, positions with weighted-average cost, realized/unrealized P&L, and rejection codes for stale or missing prices. No real money, no broker, no live quotes.
+- Price alerts (simulated): crossing rules on stored daily closes with in-app notifications; no backfill of pre-existing history, no duplicate notifications on repeated or concurrent ingestion.
+
+## Paper trading and alerts (simulated)
+
+Two practice features run entirely on stored, possibly delayed daily bars. Neither routes real money, connects to a broker, or fetches live quotes.
+
+**Paper wallet.** Every account starts with virtual ₹10,00,000. Market orders fill at the symbol's latest stored close; orders are rejected with explicit reason codes when there is no stored price (`NO_STORED_PRICE`), the stored price is stale relative to the NIFTY 50 universe (`STALE_PRICE`), or funds/holdings are insufficient. Positions track weighted-average cost; the wallet reports cash, market value, equity, and realized/unrealized P&L. Reset restores the virtual cash and clears the simulated history.
+
+**Price alerts.** A rule fires when the latest stored close crosses the target in the chosen direction (above or below) relative to the previous stored close. Creating a rule pins its baseline to the latest stored bar, so history already past the target never fires as a "new" crossing. Each bar date can fire a rule at most once, even under repeated or concurrent ingestion; a fired rule stays active and re-arms for the next crossing on a newer bar. Alerts are evaluated in the background worker right after ingestion; evaluation failures are retried by the job queue rather than silently dropped.
+
+**Delivery is in-app only.** Fired alerts appear under the notification bell. The notifier seam currently logs only - no email is sent to anyone. External delivery would be a separate, explicitly approved change.
 
 ## Architecture
 
