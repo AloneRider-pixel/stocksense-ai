@@ -6,6 +6,9 @@ import PriceChart from "./PriceChart";
 import EquityChart from "./EquityChart";
 import PredActualChart from "./PredActualChart";
 import Scanner from "./Scanner";
+import Wallet from "./Wallet";
+import Alerts from "./Alerts";
+import NotificationBell from "./NotificationBell";
 
 function fmtPct(v) {
   if (v == null) return "—";
@@ -208,6 +211,8 @@ export default function Dashboard({ user, onSignOut }) {
           <a className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>Prediction activity</a>
           <a className={tab === "evaluation" ? "active" : ""} onClick={() => setTab("evaluation")}>Model evaluation</a>
           <a className={tab === "backtest" ? "active" : ""} onClick={() => setTab("backtest")}>Backtest</a>
+          <a className={tab === "wallet" ? "active" : ""} onClick={() => setTab("wallet")}>Paper wallet</a>
+          <a className={tab === "alerts" ? "active" : ""} onClick={() => setTab("alerts")}>Alerts</a>
         </nav>
         {dataSource && <p className="aside-note">Market data: {dataSource}. May be delayed.</p>}
         <button className="ghost" onClick={onSignOut}>Sign out</button>
@@ -220,7 +225,10 @@ export default function Dashboard({ user, onSignOut }) {
             <h1>Good evening, {firstName}</h1>
             <p className="muted">Real market data, model signals, and a scored prediction record.</p>
           </div>
-          <div className="user-chip">{user.email}</div>
+          <div className="header-side">
+            <NotificationBell />
+            <div className="user-chip">{user.email}</div>
+          </div>
         </header>
 
         {tab === "overview" && (
@@ -341,6 +349,8 @@ export default function Dashboard({ user, onSignOut }) {
         )}
 
         {tab === "scanner" && <Scanner />}
+        {tab === "wallet" && <Wallet symbols={symbols} />}
+        {tab === "alerts" && <Alerts symbols={symbols} />}
 
         {tab === "screener" && (
           <section className="panel">
