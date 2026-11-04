@@ -95,14 +95,15 @@ export default function Alerts({ symbols }) {
         {rules.length > 0 && (
           <div className="table alerts-grid">
             <div className="table-head alerts-grid">
-              <span>Symbol</span><span>Rule</span><span>Status</span><span>Last triggered</span><span></span>
+              <span>Symbol</span><span>Rule</span><span>Status</span><span>Watching from</span><span>Last triggered</span><span></span>
             </div>
             {rules.map((r) => (
               <div className="row" key={r.id}>
                 <span>{r.symbol}</span>
                 <span>{r.direction} {Number(r.target_price).toLocaleString("en-IN")}</span>
                 <span className={r.active ? "positive" : "muted"}>{r.active ? "active" : "inactive"}</span>
-                <span>{r.last_triggered_bar_date || "—"}</span>
+                <span>{r.baseline_bar_date || "—"}</span>
+                <span>{r.last_triggered_bar_date || "Never"}</span>
                 <span>
                   {r.active && (
                     <button className="btn-ghost btn-inline" onClick={() => deactivate(r.id)}>Deactivate</button>

@@ -6,9 +6,34 @@ function inr(v) {
   return "₹" + Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function EquitySpark({ points }) {
+  const values = points.map((p) => Number(p.equity));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const w = 600;
+  const h = 120;
+  const step = w / (values.length - 1);
+  const path = values
+    .map((v, i) => (i === 0 ? "M" : "L") + (i * step).toFixed(1) + "," + (h - ((v - min) / span) * (h - 16) - 8).toFixed(1))
+    .join(" ");
+  return (
+    <div>
+      <svg viewBox={"0 0 " + w + " " + h} className="equity-spark" role="img" aria-label="Paper wallet equity curve">
+        <path d={path} fill="none" stroke="#5b9dff" strokeWidth="2" />
+      </svg>
+      <p className="muted">
+        {points.length} snapshots · {inr(points[0].equity)} → {inr(points[points.length - 1].equity)}
+        {" ·"}last bar {points[points.length - 1].as_of || "—"}
+      </p>
+    </div>
+  );
+}
+
 export default function Wallet({ symbols }) {
   const [summary, setSummary] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [equity, setEquity] = useState([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -17,6 +42,7 @@ export default function Wallet({ symbols }) {
   const refresh = useCallback(() => {
     api("/wallet").then(setSummary).catch((e) => setError(e.message));
     api("/wallet/orders").then((r) => setOrders(r.orders || [])).catch(() => {});
+    api("/wallet/equity").then((r) => setEquity(r.snapshots || [])).catch(() => {});
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -75,6 +101,13 @@ export default function Wallet({ symbols }) {
           <article><span>Market value</span><strong>{inr(summary.market_value)}</strong><small>{summary.as_of ? "closes as of " + summary.as_of : ""}</small></article>
           <article><span>Equity</span><strong>{inr(summary.equity)}</strong><small>cash + holdings</small></article>
           <article><span>Realized P&amp;L</span><strong className={Number(summary.realized_pnl) >= 0 ? "positive" : "negative"}>{inr(summary.realized_pnl)}</strong><small>booked</small></article>
+        </div>
+      )}
+
+      {equity.length > 1 && (
+        <div className="card">
+          <h3>Equity curve (simulated)</h3>
+          <EquitySpark points={equity} />
         </div>
       )}
 
