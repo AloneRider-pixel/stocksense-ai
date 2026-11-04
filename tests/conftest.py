@@ -26,10 +26,11 @@ def session_factory():
 @pytest.fixture()
 def client(monkeypatch, session_factory):
     import app.api.routes as api_routes
+    import app.api.wallet_routes as wallet_routes
     import app.auth.dependencies as auth_dependencies
     import app.auth.routes as auth_routes
 
-    for module in (api_routes, auth_routes, auth_dependencies):
+    for module in (api_routes, wallet_routes, auth_routes, auth_dependencies):
         monkeypatch.setattr(module, "get_session", session_factory)
 
     from app.main import app
