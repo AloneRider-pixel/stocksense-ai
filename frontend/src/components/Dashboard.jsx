@@ -6,6 +6,9 @@ import PriceChart from "./PriceChart";
 import EquityChart from "./EquityChart";
 import PredActualChart from "./PredActualChart";
 import Scanner from "./Scanner";
+import Wallet from "./Wallet";
+import Alerts from "./Alerts";
+import NotificationBell from "./NotificationBell";
 
 function fmtPct(v) {
   if (v == null) return "—";
@@ -18,6 +21,18 @@ function fmtPrice(currency, v) {
   const locale = currency === "INR" ? "en-IN" : "en-US";
   return sym + Number(v).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+const TAB_TITLES = {
+  overview: "Overview",
+  watchlist: "Watchlist",
+  scanner: "Scanner",
+  screener: "Screener",
+  activity: "Prediction activity",
+  evaluation: "Model evaluation",
+  backtest: "Backtest",
+  wallet: "Paper wallet",
+  alerts: "Alerts",
+};
 
 const INDICATOR_TOGGLES = [
   ["sma20", "SMA 20"],
@@ -201,13 +216,15 @@ export default function Dashboard({ user, onSignOut }) {
       <aside>
         <Brand />
         <nav>
-          <a className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>Overview</a>
-          <a className={tab === "watchlist" ? "active" : ""} onClick={() => setTab("watchlist")}>Watchlist</a>
-          <a className={tab === "scanner" ? "active" : ""} onClick={() => setTab("scanner")}>Scanner</a>
-          <a className={tab === "screener" ? "active" : ""} onClick={() => setTab("screener")}>Screener</a>
-          <a className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>Prediction activity</a>
-          <a className={tab === "evaluation" ? "active" : ""} onClick={() => setTab("evaluation")}>Model evaluation</a>
-          <a className={tab === "backtest" ? "active" : ""} onClick={() => setTab("backtest")}>Backtest</a>
+          <a aria-current={tab === "overview" ? "page" : undefined} className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>Overview</a>
+          <a aria-current={tab === "watchlist" ? "page" : undefined} className={tab === "watchlist" ? "active" : ""} onClick={() => setTab("watchlist")}>Watchlist</a>
+          <a aria-current={tab === "scanner" ? "page" : undefined} className={tab === "scanner" ? "active" : ""} onClick={() => setTab("scanner")}>Scanner</a>
+          <a aria-current={tab === "screener" ? "page" : undefined} className={tab === "screener" ? "active" : ""} onClick={() => setTab("screener")}>Screener</a>
+          <a aria-current={tab === "activity" ? "page" : undefined} className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>Prediction activity</a>
+          <a aria-current={tab === "evaluation" ? "page" : undefined} className={tab === "evaluation" ? "active" : ""} onClick={() => setTab("evaluation")}>Model evaluation</a>
+          <a aria-current={tab === "backtest" ? "page" : undefined} className={tab === "backtest" ? "active" : ""} onClick={() => setTab("backtest")}>Backtest</a>
+          <a aria-current={tab === "wallet" ? "page" : undefined} className={tab === "wallet" ? "active" : ""} onClick={() => setTab("wallet")}>Paper wallet</a>
+          <a aria-current={tab === "alerts" ? "page" : undefined} className={tab === "alerts" ? "active" : ""} onClick={() => setTab("alerts")}>Alerts</a>
         </nav>
         {dataSource && <p className="aside-note">Market data: {dataSource}. May be delayed.</p>}
         <button className="ghost" onClick={onSignOut}>Sign out</button>
@@ -216,11 +233,14 @@ export default function Dashboard({ user, onSignOut }) {
       <main className="dashboard">
         <header>
           <div>
-            <p className="eyebrow">OVERVIEW</p>
+            <p className="eyebrow">{(TAB_TITLES[tab] || "Overview").toUpperCase()}</p>
             <h1>Good evening, {firstName}</h1>
             <p className="muted">Real market data, model signals, and a scored prediction record.</p>
           </div>
-          <div className="user-chip">{user.email}</div>
+          <div className="header-side">
+            <NotificationBell />
+            <div className="user-chip">{user.email}</div>
+          </div>
         </header>
 
         {tab === "overview" && (
@@ -341,6 +361,8 @@ export default function Dashboard({ user, onSignOut }) {
         )}
 
         {tab === "scanner" && <Scanner />}
+        {tab === "wallet" && <Wallet symbols={symbols} />}
+        {tab === "alerts" && <Alerts symbols={symbols} />}
 
         {tab === "screener" && (
           <section className="panel">

@@ -2,9 +2,32 @@
 
 ## Current deployment status
 
-StockSense AI is containerized and deployment-ready for evaluation, but no public production URL is configured in this repository yet.
+The live demo runs on Render, connected to this repository's `main` branch
+with auto-deploy on commit - merging to `main` redeploys both services:
 
-**Live URL:** Pending AWS deployment.
+- **API**: Docker web service built from the repo `Dockerfile`. At container
+  start it runs `alembic upgrade head` and only then starts uvicorn; if
+  alembic fails, the container exits and the previous deploy keeps serving.
+  Free instance, so it spins down when idle (first request after idle is
+  slow). Migrations 0004-0006 (paper wallet, price alerts) apply on the
+  first deploy that carries them.
+- **Frontend**: static site, build `cd frontend && npm install && npm run
+  build`, publish `frontend/dist`, served at
+  https://stocksense-ai-demo.onrender.com.
+- **Database**: external managed Postgres, supplied to the API service as
+  the `DATABASE_URL` env var. Bare `postgres://` / `postgresql://` provider
+  URLs are normalized onto the pinned psycopg driver at settings load.
+
+Rollback: redeploy the previous deploy from the hosting dashboard. Schema
+changes are additive-only (new tables, nullable columns), so the previous
+code keeps working against a migrated database; `alembic downgrade` exists
+if a reversal is ever required.
+
+Migration concurrency: running `alembic upgrade head` at container start
+assumes a single API instance (true on the current free plan). Alembic does
+not coordinate concurrent upgrades with a lock; if the service is ever
+scaled to multiple instances, move the upgrade to a one-off deploy step
+instead of the shared start command.
 
 ## Local Docker Compose versus production
 
@@ -87,7 +110,7 @@ The generated models/metrics.json should only be committed when it was produced 
 1. Set MARKET_DATA_PROVIDER=twelve_data.
 2. Store TWELVE_DATA_API_KEY in a secret manager.
 3. Configure and validate production environment variables for API and worker.
-4. Run alembic upgrade head.
+4. Run alembic upgrade head (the demo API container does this automatically at start).
 5. Start API and worker as separate services.
 6. Run an initial historical ingestion.
 7. Run live-data training and review the walk-forward metrics.

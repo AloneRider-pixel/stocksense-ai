@@ -1,6 +1,6 @@
 from urllib.parse import unquote, urlsplit
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -41,6 +41,21 @@ class Settings(BaseSettings):
     scanner_refresh_enabled: bool = False  # in-app Nifty 500 download; off unless explicitly enabled
     scanner_refresh_cooldown_minutes: int = 360
     market_data_refresh_minute: int = 30
+
+    @field_validator("database_url")
+    @classmethod
+    def normalize_postgres_scheme(cls, value: str) -> str:
+        """Map bare postgres:// and postgresql:// URLs onto the psycopg driver.
+
+        Managed Postgres providers (Render, Neon) hand out bare-scheme URLs;
+        the app pins psycopg (v3) and has no psycopg2/asyncpg installed, so an
+        unqualified scheme would pick a driver that is not there. sqlite and
+        already-qualified URLs pass through unchanged.
+        """
+        for bare in ("postgres://", "postgresql://"):
+            if value.startswith(bare):
+                return "postgresql+psycopg://" + value[len(bare):]
+        return value
 
     @model_validator(mode="after")
     def reject_insecure_production_defaults(self) -> "Settings":

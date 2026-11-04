@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from arq import Retry
 
@@ -9,6 +10,9 @@ from app.db.database import get_session
 from app.db.repository import MarketDataRepository, PredictionRepository
 from app.market_data.factory import get_market_data_provider
 from app.market_data.ingestion import MarketDataIngestionService
+from app.services.post_ingest import run_post_ingest
+
+logger = logging.getLogger(__name__)
 
 
 def _ingest_symbol(symbol: str) -> dict[str, int | str]:
@@ -19,7 +23,17 @@ def _ingest_symbol(symbol: str) -> dict[str, int | str]:
             repository=MarketDataRepository(session),
             prediction_repository=PredictionRepository(session),
         )
-        return service.ingest(symbol, limit=settings.market_data_max_rows)
+        result = service.ingest(symbol, limit=settings.market_data_max_rows)
+        try:
+            result.update(run_post_ingest(session, symbol))
+        except Exception:
+            # Log and re-raise so arq retries the job: post-ingest failures
+            # stay observable and retryable, never silently dropped. Per-bar
+            # and per-date dedupe keep a retried ingest from duplicating
+            # notifications or snapshots.
+            logger.exception("post-ingest hooks failed for %s", symbol)
+            raise
+        return result
     finally:
         session.close()
 
