@@ -5,9 +5,19 @@ are complete and knowable:
 
 - Never future-dated: a bar dated after today (Asia/Kolkata) is data
   that cannot exist yet and is ignored everywhere.
-- Never mid-session: a bar dated today only qualifies once the NSE
-  session has settled (after 16:00 IST; NSE closes 15:30 IST). Before
-  that, a same-day bar is an incomplete session, not a close.
+- Never mid-session: a bar dated today only qualifies once our
+  settlement buffer has passed (16:00 IST). The NSE equity continuous
+  session runs 09:15-15:30 IST per the exchange's published market
+  timings (nseindia.com/static/market-data/market-timings); 16:00 IST
+  is our own conservative buffer for provider publication lag, not an
+  official NSE settlement guarantee. Before the buffer, a same-day bar
+  is treated as an incomplete session, not a close.
+
+Weekends and trading holidays need no calendar here: eligibility is a
+date ceiling, so on a closed day the latest qualifying bar is simply
+the previous session's. Clock correctness matters: the check trusts
+the server clock (Asia/Kolkata); a wrong clock shifts the boundary, so
+the clock is injectable for tests and ops should keep NTP honest.
 
 Charts and prediction history may still display stored same-day bars;
 this gate applies only where a bar is treated as a closing price for

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from app.db.models import Notification
 from app.services.alerts import AlertService
@@ -127,3 +128,53 @@ def test_snapshot_holders_ignores_unsettled_bar(session_factory):
 
     latest = session.query(PaperEquitySnapshot).order_by(PaperEquitySnapshot.at.desc()).first()
     assert latest.as_of == date(2026, 11, 3)
+
+
+def test_weekend_uses_friday_bar(session_factory):
+    session = session_factory()
+    user = _user(session)
+    _bar(session, "RELIANCE", date(2026, 10, 30), 1000)  # Friday
+    # Saturday 12:00 IST: ceiling is Friday, Friday's bar qualifies
+    saturday = datetime(2026, 10, 31, 12, 0, tzinfo=IST)
+    service = WalletService(session, now=saturday)
+    order = service.place_order(user_id=user.id, symbol="RELIANCE", side="buy", quantity=1)
+    assert order.status == "filled"
+    assert order.fill_bar_date == date(2026, 10, 30)
+
+
+def test_holiday_gap_falls_back_to_previous_session(session_factory):
+    session = session_factory()
+    user = _user(session)
+    # Friday bar, Monday was a trading holiday (no bar), Tuesday pre-settle
+    _bar(session, "RELIANCE", date(2026, 10, 30), 1000)  # Friday
+    tuesday_open = datetime(2026, 11, 3, 10, 0, tzinfo=IST)
+    service = WalletService(session, now=tuesday_open)
+    order = service.place_order(user_id=user.id, symbol="RELIANCE", side="buy", quantity=1)
+    assert order.status == "filled"
+    assert order.fill_bar_date == date(2026, 10, 30)  # Friday close, not "Monday"
+
+
+def test_timezone_boundary_utc_vs_ist(session_factory):
+    session = session_factory()
+    user = _user(session)
+    _bar(session, "RELIANCE", date(2026, 11, 3), 1000)
+    _bar(session, "RELIANCE", date(2026, 11, 4), 1200)
+    # 11:00 UTC == 16:30 IST: past the buffer in IST, today's bar qualifies
+    utc_now = datetime(2026, 11, 4, 11, 0, tzinfo=ZoneInfo("UTC"))
+    service = WalletService(session, now=utc_now)
+    order = service.place_order(user_id=user.id, symbol="RELIANCE", side="buy", quantity=1)
+    assert order.fill_bar_date == date(2026, 11, 4)
+    # 10:00 UTC == 15:30 IST: still inside the buffer, does not qualify
+    utc_early = datetime(2026, 11, 4, 10, 0, tzinfo=ZoneInfo("UTC"))
+    service = WalletService(session, now=utc_early)
+    order = service.place_order(user_id=user.id, symbol="RELIANCE", side="buy", quantity=1)
+    assert order.fill_bar_date == date(2026, 11, 3)
+
+
+def test_server_clock_ahead_shifts_boundary():
+    # if the server clock ran a day fast, "tomorrow's" bar would look like
+    # today's - the future-dated guard only holds while the clock is honest
+    skewed = datetime(2026, 11, 5, 12, 0, tzinfo=IST)
+    assert max_eligible_bar_date(skewed) == date(2026, 11, 4)
+    real = datetime(2026, 11, 4, 12, 0, tzinfo=IST)
+    assert max_eligible_bar_date(real) == date(2026, 11, 3)
