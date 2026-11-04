@@ -1,4 +1,5 @@
-"""Byte-exact snapshot of app/db/models.py at commit 8d4faef (last pre-migration deploy).
+"""Model definitions byte-identical to app/db/models.py at commit 8d4faef (last
+pre-migration deploy); only this header docstring was added.
 
 Production databases were created by Base.metadata.create_all() from these
 models (the old startup ran create_all, never alembic). The adoption gate in

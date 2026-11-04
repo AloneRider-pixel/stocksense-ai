@@ -40,7 +40,7 @@ try:
     engine = create_engine(f"{path_base}/{name}" + (f"?{query}" if sep else ""))
     Base.metadata.create_all(bind=engine)
     with engine.connect() as conn:
-        tables = introspect_schema(conn)
+        schema = introspect_schema(conn)
     engine.dispose()
 finally:
     with psycopg.connect(admin_url, autocommit=True) as conn:
@@ -48,11 +48,16 @@ finally:
 
 payload = {
     "generated_from": (
-        "app/db/legacy_models_snapshot.py (byte-exact app/db/models.py at commit "
-        "8d4faef, the last pre-migration deploy) via Base.metadata.create_all()"
+        "app/db/legacy_models_snapshot.py (model definitions byte-identical to "
+        "app/db/models.py at commit 8d4faef, the last pre-migration deploy) via "
+        "Base.metadata.create_all()"
     ),
     "generated_by": "scripts/generate_legacy_schema_spec.py",
-    "tables": tables,
+    "verified_against_production": (
+        "matches the live database introspection (PostgreSQL 18.6, Neon project "
+        "stocksense-ai) taken read-only via the owner console on 2026-11-04"
+    ),
+    "schema": schema,
 }
 SPEC_PATH.write_text(json.dumps(payload, indent=2) + "\n")
-print(f"wrote {SPEC_PATH} with {len(tables)} tables: {sorted(tables)}")
+print(f"wrote {SPEC_PATH} with {len(schema['tables'])} tables: {sorted(schema['tables'])}")

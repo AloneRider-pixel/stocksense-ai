@@ -81,6 +81,7 @@ def test_upgrade_head_on_empty_database(scratch_db):
         "users",
         "market_bars",
         "scanner_bars",
+        "watchlist_items",
         "paper_accounts",
         "paper_positions",
         "paper_orders",
@@ -91,7 +92,7 @@ def test_upgrade_head_on_empty_database(scratch_db):
         assert expected in tables, f"missing table {expected}"
     with psycopg.connect(db_url.replace("+psycopg", "")) as conn:
         version = conn.execute("SELECT version_num FROM alembic_version").fetchone()
-    assert version[0] == "0006_alert_rule_baseline"
+    assert version[0] == "0008_align_legacy_defaults"
 
 
 def test_upgrade_from_previous_production_head(scratch_db):

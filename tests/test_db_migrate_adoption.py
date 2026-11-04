@@ -116,8 +116,8 @@ def test_empty_database_upgrades_to_head(scratch_db):
     _, db_url = scratch_db
     result = _migrate(db_url)
     assert result.returncode == 0, result.stderr
-    assert _versions(db_url) == ["0006_alert_rule_baseline"]
-    assert LEGACY_TABLES - {"watchlist_items"} | V2_TABLES <= _tables(db_url)
+    assert _versions(db_url) == ["0008_align_legacy_defaults"]
+    assert LEGACY_TABLES | V2_TABLES <= _tables(db_url)
 
 
 def test_exact_legacy_schema_is_adopted_and_data_preserved(scratch_db):
@@ -141,7 +141,7 @@ def test_exact_legacy_schema_is_adopted_and_data_preserved(scratch_db):
 
     result = _migrate(db_url)
     assert result.returncode == 0, result.stderr
-    assert _versions(db_url) == ["0006_alert_rule_baseline"]
+    assert _versions(db_url) == ["0008_align_legacy_defaults"]
     tables = _tables(db_url)
     assert LEGACY_TABLES | V2_TABLES <= tables
     with psycopg.connect(db_url.replace("+psycopg", "")) as conn:
@@ -158,7 +158,7 @@ def test_adoption_is_idempotent_on_restart(scratch_db):
     assert _migrate(db_url).returncode == 0
     second = _migrate(db_url)
     assert second.returncode == 0, second.stderr
-    assert _versions(db_url) == ["0006_alert_rule_baseline"]
+    assert _versions(db_url) == ["0008_align_legacy_defaults"]
 
 
 def test_drifted_legacy_schema_fails_closed(scratch_db):
@@ -212,7 +212,7 @@ def test_empty_version_table_treated_as_unversioned(scratch_db):
 
     result = _migrate(db_url)
     assert result.returncode == 0, result.stderr
-    assert _versions(db_url) == ["0006_alert_rule_baseline"]
+    assert _versions(db_url) == ["0008_align_legacy_defaults"]
     assert V2_TABLES <= _tables(db_url)
 
 
@@ -232,7 +232,7 @@ def test_versioned_database_upgrades_without_gate(scratch_db):
     )
     result = _migrate(db_url)
     assert result.returncode == 0, result.stderr
-    assert _versions(db_url) == ["0006_alert_rule_baseline"]
+    assert _versions(db_url) == ["0008_align_legacy_defaults"]
     assert V2_TABLES <= _tables(db_url)
 
 
@@ -246,7 +246,7 @@ def test_failed_adoption_can_be_retried_after_fix(scratch_db):
         conn.execute("ALTER TABLE users ADD COLUMN full_name varchar(120)")
     result = _migrate(db_url)
     assert result.returncode == 0, result.stderr
-    assert _versions(db_url) == ["0006_alert_rule_baseline"]
+    assert _versions(db_url) == ["0008_align_legacy_defaults"]
 
 
 def test_concurrent_adoption_is_serialized(scratch_db):
@@ -267,7 +267,164 @@ def test_concurrent_adoption_is_serialized(scratch_db):
         results = list(pool.map(_migrate, [db_url, db_url]))
     for result in results:
         assert result.returncode == 0, result.stderr
-    assert _versions(db_url) == ["0006_alert_rule_baseline"]
+    assert _versions(db_url) == ["0008_align_legacy_defaults"]
     assert V2_TABLES <= _tables(db_url)
     with psycopg.connect(db_url.replace("+psycopg", "")) as conn:
         assert conn.execute("SELECT count(*) FROM users").fetchone()[0] == 1
+
+
+def _introspect(db_url: str) -> dict:
+    from app.db.schema_spec import introspect_schema
+
+    engine = create_engine(db_url)
+    with engine.connect() as conn:
+        schema = introspect_schema(conn)
+    engine.dispose()
+    return schema
+
+
+def test_fresh_and_adopted_final_schemas_match():
+    """Fresh install and adopted legacy database must converge to one schema."""
+    fresh = _scratch_db()
+    adopted = _scratch_db()
+    try:
+        fresh_url, adopted_url = _db_url(fresh), _db_url(adopted)
+        assert _migrate(fresh_url).returncode == 0
+        _create_legacy_schema(adopted_url)
+        assert _migrate(adopted_url).returncode == 0
+        fresh_schema = _introspect(fresh_url)
+        adopted_schema = _introspect(adopted_url)
+
+        def normalized(schema: dict) -> dict:
+            # Column ordinal position differs between the migration and
+            # create_all histories (prediction_records); it is semantically
+            # meaningless, so compare columns name-keyed.
+            out = {"tables": {}, "extensions": schema["extensions"]}
+            for name, entry in schema["tables"].items():
+                e = dict(entry)
+                e["columns"] = sorted(e["columns"], key=lambda c: c[0])
+                out["tables"][name] = e
+            return out
+
+        assert normalized(fresh_schema) == normalized(adopted_schema)
+    finally:
+        _drop_db(fresh)
+        _drop_db(adopted)
+
+
+def test_watchlist_roundtrip_on_fresh_install(scratch_db):
+    """The fresh-install path (migration-created table) serves watchlist ops."""
+    _, db_url = scratch_db
+    assert _migrate(db_url).returncode == 0
+    engine = create_engine(db_url)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO users (email, password_hash, full_name, is_active, created_at)"
+                " VALUES ('owner@example.com', 'hash', 'Owner', true, now())"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO watchlist_items (user_id, symbol, created_at)"
+                " VALUES (1, 'RELIANCE', now())"
+            )
+        )
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT symbol FROM watchlist_items WHERE user_id = 1")).fetchall()
+    assert [r[0] for r in rows] == ["RELIANCE"]
+    # unique constraint from the model is enforced (separate transaction: an
+    # open writer would deadlock the duplicate insert's unique-index check)
+    with pytest.raises(Exception), engine.begin() as dup:
+        dup.execute(
+            text(
+                "INSERT INTO watchlist_items (user_id, symbol, created_at)"
+                " VALUES (1, 'RELIANCE', now())"
+            )
+        )
+    engine.dispose()
+
+
+def test_0007_creates_watchlist_for_migration_only_databases(scratch_db):
+    """A database versioned at 0003 (no watchlist table) gains it via 0007."""
+    _, db_url = scratch_db
+    env = dict(os.environ, DATABASE_URL=db_url)
+    assert (
+        subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "0003_scanner_bars"],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        ).returncode
+        == 0
+    )
+    assert "watchlist_items" not in _tables(db_url)
+    result = _migrate(db_url)
+    assert result.returncode == 0, result.stderr
+    assert "watchlist_items" in _tables(db_url)
+    assert _versions(db_url) == ["0008_align_legacy_defaults"]
+
+
+def test_0007_fails_loudly_on_drifted_watchlist(scratch_db):
+    """Versioned database with a drifted watchlist: verify, never hide."""
+    _, db_url = scratch_db
+    env = dict(os.environ, DATABASE_URL=db_url)
+    assert (
+        subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "0003_scanner_bars"],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        ).returncode
+        == 0
+    )
+    with psycopg.connect(db_url.replace("+psycopg", ""), autocommit=True) as conn:
+        conn.execute(
+            "CREATE TABLE watchlist_items (id serial PRIMARY KEY,"
+            " user_id integer NOT NULL, symbol varchar(64) NOT NULL,"
+            " created_at timestamptz NOT NULL)"
+        )
+    result = _migrate(db_url)
+    assert result.returncode != 0
+    assert "does not match the expected legacy schema" in result.stderr
+    assert _versions(db_url) == ["0003_scanner_bars"]  # chain halted before 0007
+
+
+def test_advisory_lock_held_during_adoption(scratch_db):
+    """A second connection must observe the advisory lock while migrate runs."""
+    import time
+
+    _, db_url = scratch_db
+    _create_legacy_schema(db_url)
+    env = dict(os.environ, DATABASE_URL=db_url)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "app.db.migrate"],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    key = 862_414_421
+    seen = False
+    deadline = time.time() + 90
+    try:
+        with psycopg.connect(db_url.replace("+psycopg", "")) as conn:
+            while proc.poll() is None and time.time() < deadline:
+                row = conn.execute(
+                    "SELECT 1 FROM pg_locks WHERE locktype = 'advisory'"
+                    " AND classid = %s AND objid = %s",
+                    ((key >> 32) & 0xFFFFFFFF, key & 0xFFFFFFFF),
+                ).fetchone()
+                if row:
+                    seen = True
+                    break
+                time.sleep(0.025)
+    finally:
+        out, err = proc.communicate(timeout=60)
+    assert proc.returncode == 0, err
+    assert seen, "advisory lock was never observed during adoption"
