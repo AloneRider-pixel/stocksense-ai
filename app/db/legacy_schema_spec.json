@@ -1,0 +1,461 @@
+{
+  "generated_from": "app/db/legacy_models_snapshot.py (byte-exact app/db/models.py at commit 8d4faef, the last pre-migration deploy) via Base.metadata.create_all()",
+  "generated_by": "scripts/generate_legacy_schema_spec.py",
+  "tables": {
+    "market_bars": {
+      "columns": [
+        [
+          "id",
+          "integer",
+          true
+        ],
+        [
+          "symbol",
+          "character varying(32)",
+          true
+        ],
+        [
+          "date",
+          "date",
+          true
+        ],
+        [
+          "open",
+          "double precision",
+          true
+        ],
+        [
+          "high",
+          "double precision",
+          true
+        ],
+        [
+          "low",
+          "double precision",
+          true
+        ],
+        [
+          "close",
+          "double precision",
+          true
+        ],
+        [
+          "volume",
+          "integer",
+          true
+        ],
+        [
+          "source_provider",
+          "character varying(64)",
+          true
+        ],
+        [
+          "ingested_at",
+          "timestamp with time zone",
+          true
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "date",
+          "symbol"
+        ]
+      ],
+      "fks": [],
+      "indexes": {
+        "ix_market_bars_date": false,
+        "ix_market_bars_ingested_at": false,
+        "ix_market_bars_symbol": false,
+        "market_bars_pkey": true,
+        "uq_market_bars_symbol_date": true
+      }
+    },
+    "prediction_records": {
+      "columns": [
+        [
+          "id",
+          "integer",
+          true
+        ],
+        [
+          "user_id",
+          "integer",
+          false
+        ],
+        [
+          "symbol",
+          "character varying(32)",
+          true
+        ],
+        [
+          "prediction_date",
+          "date",
+          true
+        ],
+        [
+          "predicted_close",
+          "double precision",
+          true
+        ],
+        [
+          "expected_change_pct",
+          "double precision",
+          true
+        ],
+        [
+          "model",
+          "character varying(64)",
+          true
+        ],
+        [
+          "cached",
+          "boolean",
+          true
+        ],
+        [
+          "actual_date",
+          "date",
+          false
+        ],
+        [
+          "actual_close",
+          "double precision",
+          false
+        ],
+        [
+          "absolute_error",
+          "double precision",
+          false
+        ],
+        [
+          "percentage_error",
+          "double precision",
+          false
+        ],
+        [
+          "direction_correct",
+          "boolean",
+          false
+        ],
+        [
+          "evaluated_at",
+          "timestamp with time zone",
+          false
+        ],
+        [
+          "created_at",
+          "timestamp with time zone",
+          true
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [],
+      "fks": [
+        [
+          [
+            "user_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": {
+        "ix_prediction_records_actual_date": false,
+        "ix_prediction_records_created_at": false,
+        "ix_prediction_records_prediction_date": false,
+        "ix_prediction_records_symbol": false,
+        "ix_prediction_records_user_id": false,
+        "prediction_records_pkey": true
+      }
+    },
+    "scanner_bars": {
+      "columns": [
+        [
+          "id",
+          "integer",
+          true
+        ],
+        [
+          "symbol",
+          "character varying(32)",
+          true
+        ],
+        [
+          "date",
+          "date",
+          true
+        ],
+        [
+          "high",
+          "double precision",
+          true
+        ],
+        [
+          "low",
+          "double precision",
+          true
+        ],
+        [
+          "close",
+          "double precision",
+          true
+        ],
+        [
+          "volume",
+          "integer",
+          true
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "date",
+          "symbol"
+        ]
+      ],
+      "fks": [],
+      "indexes": {
+        "ix_scanner_bars_symbol": false,
+        "scanner_bars_pkey": true,
+        "uq_scanner_bars_symbol_date": true
+      }
+    },
+    "scanner_runs": {
+      "columns": [
+        [
+          "id",
+          "integer",
+          true
+        ],
+        [
+          "observed_at",
+          "timestamp with time zone",
+          true
+        ],
+        [
+          "as_of",
+          "date",
+          true
+        ],
+        [
+          "origin",
+          "character varying(16)",
+          true
+        ],
+        [
+          "origin_reason",
+          "character varying(160)",
+          true
+        ],
+        [
+          "entry_not_before",
+          "date",
+          true
+        ],
+        [
+          "formula_version",
+          "character varying(32)",
+          true
+        ],
+        [
+          "config",
+          "text",
+          true
+        ],
+        [
+          "excluded",
+          "text",
+          true
+        ],
+        [
+          "universe_count",
+          "integer",
+          true
+        ],
+        [
+          "ranked_count",
+          "integer",
+          true
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [],
+      "fks": [],
+      "indexes": {
+        "ix_scanner_runs_as_of": false,
+        "scanner_runs_pkey": true
+      }
+    },
+    "scanner_signals": {
+      "columns": [
+        [
+          "id",
+          "integer",
+          true
+        ],
+        [
+          "run_id",
+          "integer",
+          true
+        ],
+        [
+          "source_bar_date",
+          "date",
+          true
+        ],
+        [
+          "symbol",
+          "character varying(32)",
+          true
+        ],
+        [
+          "kind",
+          "character varying(24)",
+          true
+        ],
+        [
+          "close",
+          "double precision",
+          true
+        ],
+        [
+          "inputs",
+          "text",
+          true
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "kind",
+          "run_id",
+          "symbol"
+        ]
+      ],
+      "fks": [
+        [
+          [
+            "run_id"
+          ],
+          "scanner_runs",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": {
+        "ix_scanner_signals_run_id": false,
+        "ix_scanner_signals_source_bar_date": false,
+        "scanner_signals_pkey": true,
+        "uq_scanner_signals_run": true
+      }
+    },
+    "users": {
+      "columns": [
+        [
+          "id",
+          "integer",
+          true
+        ],
+        [
+          "email",
+          "character varying(320)",
+          true
+        ],
+        [
+          "password_hash",
+          "character varying(512)",
+          true
+        ],
+        [
+          "full_name",
+          "character varying(120)",
+          false
+        ],
+        [
+          "is_active",
+          "boolean",
+          true
+        ],
+        [
+          "created_at",
+          "timestamp with time zone",
+          true
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [],
+      "fks": [],
+      "indexes": {
+        "ix_users_created_at": false,
+        "ix_users_email": true,
+        "ix_users_is_active": false,
+        "users_pkey": true
+      }
+    },
+    "watchlist_items": {
+      "columns": [
+        [
+          "id",
+          "integer",
+          true
+        ],
+        [
+          "user_id",
+          "integer",
+          true
+        ],
+        [
+          "symbol",
+          "character varying(32)",
+          true
+        ],
+        [
+          "created_at",
+          "timestamp with time zone",
+          true
+        ]
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "symbol",
+          "user_id"
+        ]
+      ],
+      "fks": [
+        [
+          [
+            "user_id"
+          ],
+          "users",
+          [
+            "id"
+          ]
+        ]
+      ],
+      "indexes": {
+        "ix_watchlist_items_user_id": false,
+        "uq_watchlist_user_symbol": true,
+        "watchlist_items_pkey": true
+      }
+    }
+  }
+}
