@@ -6,11 +6,22 @@ The live demo runs on Render, connected to this repository's `main` branch
 with auto-deploy on commit - merging to `main` redeploys both services:
 
 - **API**: Docker web service built from the repo `Dockerfile`. At container
-  start it runs `alembic upgrade head` and only then starts uvicorn; if
-  alembic fails, the container exits and the previous deploy keeps serving.
+  start it runs `python -m app.db.migrate` and only then starts uvicorn; if
+  migration fails, the container exits and the previous deploy keeps serving.
   Free instance, so it spins down when idle (first request after idle is
   slow). Migrations 0004-0006 (paper wallet, price alerts) apply on the
   first deploy that carries them.
+
+  `app.db.migrate` also handles alembic adoption: the demo database predates
+  alembic (its tables came from the old `create_all` startup, with no
+  `alembic_version` row). The entrypoint compares an unversioned database's
+  structure against `app/db/legacy_schema_spec.json` (generated from the
+  last pre-migration deploy's models) and only then stamps the pre-migration
+  head `0003_scanner_bars` and upgrades. A drifted, partial, or unknown
+  schema fails closed with a printed diff - no stamp, no migration, no data
+  change - and needs manual review. Empty databases and already-versioned
+  databases upgrade normally. Concurrent container starts are serialized
+  with a Postgres advisory lock.
 - **Frontend**: static site, build `cd frontend && npm install && npm run
   build`, publish `frontend/dist`, served at
   https://stocksense-ai-demo.onrender.com.
@@ -23,11 +34,9 @@ changes are additive-only (new tables, nullable columns), so the previous
 code keeps working against a migrated database; `alembic downgrade` exists
 if a reversal is ever required.
 
-Migration concurrency: running `alembic upgrade head` at container start
-assumes a single API instance (true on the current free plan). Alembic does
-not coordinate concurrent upgrades with a lock; if the service is ever
-scaled to multiple instances, move the upgrade to a one-off deploy step
-instead of the shared start command.
+Migration concurrency: `app.db.migrate` holds a Postgres advisory lock
+around adoption and upgrade, so multiple instances starting at once are
+serialized.
 
 ## Local Docker Compose versus production
 
@@ -110,7 +119,7 @@ The generated models/metrics.json should only be committed when it was produced 
 1. Set MARKET_DATA_PROVIDER=twelve_data.
 2. Store TWELVE_DATA_API_KEY in a secret manager.
 3. Configure and validate production environment variables for API and worker.
-4. Run alembic upgrade head (the demo API container does this automatically at start).
+4. Run python -m app.db.migrate (the demo API container does this automatically at start).
 5. Start API and worker as separate services.
 6. Run an initial historical ingestion.
 7. Run live-data training and review the walk-forward metrics.

@@ -118,7 +118,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-alembic upgrade head
+python -m app.db.migrate   # gated startup migration; bare `alembic upgrade head` also works for local dev
 uvicorn app.main:app --reload
 ```
 

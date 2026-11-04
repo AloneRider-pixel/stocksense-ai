@@ -81,6 +81,7 @@ def test_upgrade_head_on_empty_database(scratch_db):
         "users",
         "market_bars",
         "scanner_bars",
+        "watchlist_items",
         "paper_accounts",
         "paper_positions",
         "paper_orders",
@@ -91,7 +92,7 @@ def test_upgrade_head_on_empty_database(scratch_db):
         assert expected in tables, f"missing table {expected}"
     with psycopg.connect(db_url.replace("+psycopg", "")) as conn:
         version = conn.execute("SELECT version_num FROM alembic_version").fetchone()
-    assert version[0] == "0006_alert_rule_baseline"
+    assert version[0] == "0008_align_legacy_defaults"
 
 
 def test_upgrade_from_previous_production_head(scratch_db):
@@ -116,12 +117,12 @@ def test_upgrade_head_is_idempotent(scratch_db):
 
 
 def test_failed_migration_aborts_startup():
-    """The container start command must not boot the server when alembic
-    fails: `alembic upgrade head && uvicorn ...` exits non-zero and never
+    """The container start command must not boot the server when migration
+    fails: `python -m app.db.migrate && uvicorn ...` exits non-zero and never
     reaches the server."""
     bad_url = "postgresql+psycopg://postgres:wrong@127.0.0.1:1/never"
     result = subprocess.run(
-        ["sh", "-c", f"{sys.executable} -m alembic upgrade head && echo SERVER_BOOTED"],
+        ["sh", "-c", f"{sys.executable} -m app.db.migrate && echo SERVER_BOOTED"],
         cwd=REPO_ROOT,
         env=dict(os.environ, DATABASE_URL=bad_url),
         capture_output=True,
