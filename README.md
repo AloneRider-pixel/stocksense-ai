@@ -125,6 +125,8 @@ Measured at commit `8bbd89a` (Python 3.12). Commands are in [Verification](#veri
 
 ## Quick start
 
+**Prerequisites:** Python 3.11+ (3.12 was used for the verified results below), Node.js 20+ for the frontend, and Docker with the Compose plugin for the optional full-stack path.
+
 Backend:
 
 ```bash
