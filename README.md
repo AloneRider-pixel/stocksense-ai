@@ -15,7 +15,7 @@ Built solo by [Himanshu Bisht](https://github.com/AloneRider-pixel) to demonstra
 
 **Stack:** FastAPI · PostgreSQL · Redis · scikit-learn · React/Vite · Docker · GitHub Actions
 
-**API:** [interactive docs (Swagger)](https://stocksense-ai-zvo7.onrender.com/docs) · [endpoint guide with real examples](docs/api.md)
+**API:** [endpoint guide with real examples](docs/api.md)
 
 ## Try it in 2 minutes
 
@@ -32,10 +32,6 @@ Try the deployed app: [stocksense-ai-demo.onrender.com](https://stocksense-ai-de
 |---|---|
 | Email | `demo@stocksense.app` |
 | Password | `Demo1234!` |
-
-![StockSense AI demo: landing, dashboard, backtest, model evaluation, and scored prediction record](docs/screenshots/stocksense-demo.gif)
-
-*Captured 2026-11-07. The live track record shown is young - 2 scored predictions at capture time, so the live 100% directional-accuracy card is a 2-sample result, not a credible forecast-quality claim. The 85.0% directional accuracy quoted below is the offline walk-forward fixture result, not live performance.*
 
 ![StockSense AI dashboard](docs/screenshots/dashboard.png)
 
