@@ -33,6 +33,10 @@ Try the deployed app: [stocksense-ai-demo.onrender.com](https://stocksense-ai-de
 | Email | `demo@stocksense.app` |
 | Password | `Demo1234!` |
 
+![StockSense AI demo: landing, dashboard, backtest, model evaluation, and scored prediction record](docs/screenshots/stocksense-demo.gif)
+
+*Captured 2026-11-07. The live track record shown is young - 2 scored predictions at capture time, so the live 100% directional-accuracy card is a 2-sample result, not a credible forecast-quality claim. The 85.0% directional accuracy quoted below is the offline walk-forward fixture result, not live performance.*
+
 ![StockSense AI dashboard](docs/screenshots/dashboard.png)
 
 The demo serves real daily market data (Yahoo Finance for NSE equities, the NIFTY 50 index, metals, and FX; Twelve Data for optional US symbols; bars may be delayed). Metals are USD spot indications, not MCX futures. FX rates are indicative interbank levels, not executable prices. The live track record builds as stored forecasts are reconciled against real closes.
@@ -108,6 +112,20 @@ A credible model-quality claim should include:
 - the metric definition and sample count;
 - the environment/model version; and
 - the producing commit or experiment artifact.
+
+## Verified results
+
+Measured at commit `8bbd89a` (Python 3.12). Commands are in [Verification](#verification).
+
+**Test suite**
+- 241 passed, 23 skipped (PostgreSQL-gated integration tests), 0 failed, ~24 seconds.
+- Local coverage without the PostgreSQL-gated paths: 83% of 3,230 statements. CI provisions PostgreSQL and enforces >=85% coverage.
+
+**Sample benchmark** (deterministic fixture - reproducibility evidence, not live forecast accuracy or financial performance)
+- Dataset: `data/sample_prices.csv` (sha256-pinned, 180 rows; 140 scored rows across 5 walk-forward folds).
+- Model: `ci-sample-v1`, produced by `python -m app.services.training --data-path data/sample_prices.csv --limit 1000 --model-version ci-sample-v1`.
+- MAE 0.1654, RMSE 0.2074, directional accuracy 85.0%; last-close baseline MAE 0.2995 (44.8% improvement over the baseline).
+- `python scripts/verify_sample_evidence.py` re-verifies the stored evidence artifact.
 
 ## Quick start
 
