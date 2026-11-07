@@ -15,7 +15,7 @@ Built solo by [Himanshu Bisht](https://github.com/AloneRider-pixel) to demonstra
 
 **Stack:** FastAPI · PostgreSQL · Redis · scikit-learn · React/Vite · Docker · GitHub Actions
 
-**API:** [interactive docs (Swagger)](https://stocksense-ai-zvo7.onrender.com/docs) · [endpoint guide with real examples](docs/api.md)
+**API:** [endpoint guide with real examples](docs/api.md)
 
 ## Try it in 2 minutes
 
@@ -109,11 +109,28 @@ A credible model-quality claim should include:
 - the environment/model version; and
 - the producing commit or experiment artifact.
 
+## Verified results
+
+Measured at commit `8bbd89a` (Python 3.12). Commands are in [Verification](#verification).
+
+**Test suite**
+- 241 passed, 23 skipped (PostgreSQL-gated integration tests), 0 failed, ~24 seconds.
+- Local coverage without the PostgreSQL-gated paths: 83% of 3,230 statements. CI provisions PostgreSQL and enforces >=85% coverage.
+
+**Sample benchmark** (deterministic fixture - reproducibility evidence, not live forecast accuracy or financial performance)
+- Dataset: `data/sample_prices.csv` (sha256-pinned, 180 rows; 140 scored rows across 5 walk-forward folds).
+- Model: `ci-sample-v1`, produced by `python -m app.services.training --data-path data/sample_prices.csv --limit 1000 --model-version ci-sample-v1`.
+- MAE 0.1654, RMSE 0.2074, directional accuracy 85.0%; last-close baseline MAE 0.2995 (44.8% improvement over the baseline).
+- `python scripts/verify_sample_evidence.py` re-verifies the stored evidence artifact.
+
 ## Quick start
+
+**Prerequisites:** Python 3.11+ (3.12 was used for the verified results below), Node.js 20+ for the frontend, and Docker with the Compose plugin for the database and optional full-stack path.
 
 Backend:
 
 ```bash
+docker compose up -d postgres   # dev database matching the default dev DATABASE_URL
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
