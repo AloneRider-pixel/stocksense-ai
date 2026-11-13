@@ -136,7 +136,7 @@ try {
       const path=new URL(route.request().url()).pathname;
       if(path.endsWith('/auth/me'))return route.fulfill({status:401,json:{error:{message:'Expired fixture'}}});
       if(path.endsWith('/public/accuracy'))return route.fulfill({json:{overall:{evaluated_predictions:2,directional_accuracy_pct:50,mae:1.2},symbols:[]}});
-      if(path.endsWith('/public/predictions/latest'))return route.fulfill({json:{predictions:[]}});
+      if(path.endsWith('/public/predictions/latest'))return route.fulfill({json:{predictions:[{symbol:'INFY',prediction_date:'2026-11-12',predicted_close:1450,direction:'up'}]}});
       return route.fulfill({json:{symbols:[]}});
     });
     await page.goto(base);
@@ -145,6 +145,8 @@ try {
     await page.getByText('zero-volume gold, silver and FX predictions are not supported.',{exact:false}).waitFor();
     await page.getByText('pooled all-symbol statistics.',{exact:false}).waitFor();
     await page.getByText('Pending forecasts, cached responses and failed saves are not new scored records.',{exact:false}).waitFor();
+    await page.getByText('Latest stored forecasts · may include pending and scored records',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Latest stored forecasts · pending until matching realized closes are available',{exact:true}).count(),0);
     if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/landing-supported-desktop.png`});
     await page.setViewportSize({width:390,height:844});
     if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/landing-supported-mobile.png`,fullPage:true});
