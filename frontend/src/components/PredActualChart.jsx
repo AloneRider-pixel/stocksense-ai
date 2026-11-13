@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 const W = 860;
 const H = 240;
 const PAD = { top: 16, right: 16, bottom: 24, left: 70 };
@@ -13,14 +15,26 @@ function path(pts) {
   return d;
 }
 
-export default function PredActualChart({ items, currency }) {
+export default function PredActualChart({ items, symbolMeta = {} }) {
+  const [selectedSymbol, setSelectedSymbol] = useState("");
+  const symbols = [...new Set((items || []).filter((i) => i.actual_close != null).map((i) => i.symbol))].sort();
+  const symbol = symbols.includes(selectedSymbol) ? selectedSymbol : symbols[0];
+  const currency = symbolMeta[symbol]?.currency;
   const scored = (items || [])
+    .filter((i) => i.symbol === symbol)
     .filter((i) => i.actual_close != null)
     .slice()
     .sort((a, b) => (a.prediction_date < b.prediction_date ? -1 : 1));
 
+  const selector = symbols.length > 0 && (
+    <label className="chart-symbol-control">Chart symbol
+      <select aria-label="Chart symbol" value={symbol} onChange={(event) => setSelectedSymbol(event.target.value)}>
+        {symbols.map((value) => <option key={value} value={value}>{value}</option>)}
+      </select>
+    </label>
+  );
   if (scored.length < 2) {
-    return <div className="empty">Predicted-vs-actual lines appear once at least two predictions have been scored.</div>;
+    return <div>{selector}<p className="empty">At least two scored records for the same symbol are needed for a line chart. Different symbols are never joined.</p></div>;
   }
 
   const hasBaseline = scored.some((i) => i.baseline_close != null);
@@ -44,11 +58,14 @@ export default function PredActualChart({ items, currency }) {
     ? path(scored.map((p, i) => (p.baseline_close == null ? null : [x(i), y(p.baseline_close)])))
     : null;
   const ticks = [min, (min + max) / 2, max];
-  const sym = currency === "INR" ? "₹" : "$";
+  const sym = currency === "INR" ? "₹" : currency === "USD" ? "$" : "";
 
   return (
     <div className="equity-chart">
-      <svg viewBox={"0 0 " + W + " " + H} width="100%" role="img" aria-label="Predicted vs actual closes">
+      {selector}
+      <p className="muted small-print">{symbol} · {currency || "currency not provided"} · {scored.length} scored records shown</p>
+      <div className="record-chart-scroll" tabIndex={0} aria-label="Scrollable prediction chart">
+      <svg viewBox={"0 0 " + W + " " + H} width="100%" role="img" aria-label={"Predicted vs actual closes for " + symbol}>
         {ticks.map((t) => (
           <g key={t}>
             <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke="#1f2f47" strokeWidth="1" />
@@ -65,6 +82,7 @@ export default function PredActualChart({ items, currency }) {
         <text x={PAD.left} y={H - 6} fill="#7590b0" fontSize="11">{scored[0].prediction_date}</text>
         <text x={W - PAD.right} y={H - 6} fill="#7590b0" fontSize="11" textAnchor="end">{scored[scored.length - 1].prediction_date}</text>
       </svg>
+      </div>
       <div className="equity-legend">
         <span><i className="legend-dot" style={{ background: "#5b9dff" }} />Predicted close</span>
         <span><i className="legend-dot" style={{ background: "#4ade9d" }} />Actual close</span>
@@ -74,4 +92,4 @@ export default function PredActualChart({ items, currency }) {
       </div>
     </div>
   );
-}
+      }
