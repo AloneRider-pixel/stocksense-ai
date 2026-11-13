@@ -186,3 +186,24 @@ def test_indicators_endpoint_returns_series(client, auth_headers, monkeypatch):
     assert payload["symbol"] == "DEMO"
     assert len(payload["dates"]) == len(payload["rsi14"]) == 100
     assert payload["sma50"][-1] is not None
+
+
+def test_yfinance_upgrade_preserves_request_window_and_zero_volume(monkeypatch):
+    calls = []
+
+    class FakeTicker:
+        def __init__(self, symbol):
+            calls.append(symbol)
+
+        def history(self, period, interval, timeout):
+            calls.append((period, interval, timeout))
+            return _fake_history([(100.0, 105.0, 99.0, 103.0, 0)])
+
+    import yfinance as yf
+
+    monkeypatch.setattr(yf, "Ticker", FakeTicker)
+    for limit, expected_period in [(100, "1y"), (101, "2y"), (301, "5y")]:
+        bars = YFinanceNSEProvider().history("RELIANCE", limit=limit)
+        assert calls[-2] == "RELIANCE.NS"
+        assert calls[-1][0:2] == (expected_period, "1d")
+        assert bars[0].volume == 0  # Do not invent volume to make forecasts pass.
