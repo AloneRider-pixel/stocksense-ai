@@ -139,7 +139,8 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
 
       <section className="section" id="proof">
         <p className="eyebrow">LIVE TRACK RECORD</p>
-        <h2>Proof, not promises.</h2>
+        <h2>Stored results, with limits.</h2>
+          <p className="muted">Historical figures can include older inference versions. They are not a separate validation of the corrected latest-bar-v1 inference or a measure of future returns.</p>
         <p className="hero-sub">
           Every prediction the API serves is stored when it is made and scored against the
           next realized close. The baseline is an always-up naive guess over the same scored

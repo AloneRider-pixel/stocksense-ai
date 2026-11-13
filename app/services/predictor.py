@@ -94,7 +94,7 @@ class Predictor:
                 ((predicted_close - current_close) / current_close) * 100,
                 4,
             ),
-            "model": model_version or "random-forest-unknown",
+            "model": (model_version or "random-forest-unknown") + ":latest-bar-v1",
             "cached": False,
         }
 
@@ -104,4 +104,4 @@ class Predictor:
         history: list[dict[str, object]],
     ) -> str:
         raw = f"{symbol}:{history[-10:]}".encode()
-        return "prediction:" + sha256(raw).hexdigest()
+        return "prediction:latest-bar-v1:" + sha256(raw).hexdigest()

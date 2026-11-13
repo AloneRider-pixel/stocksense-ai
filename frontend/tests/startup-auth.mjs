@@ -68,5 +68,22 @@ try {
     await page.getByRole('button',{name:'Retry connection'}).waitFor();
     assert.equal(await page.evaluate(()=>localStorage.getItem('stocksense_token')),'offline-fixture');
   });
+  await scenario('historical versions and pooled-metric limits remain visible', async page => {
+    await page.route('**/api/v1/**',async route=>{
+      const p=new URL(route.request().url()).pathname;
+      if(p.endsWith('/auth/me'))return route.fulfill({json:{email:'fixture@example.invalid',full_name:'Fixture'}});
+      if(p.endsWith('/predictions'))return route.fulfill({json:[{id:1,symbol:'INFY',prediction_date:'2026-11-13',predicted_close:1141,model:'random-forest-v0.4:latest-bar-v1'}]});
+      if(p.includes('/history')||p.endsWith('/symbols'))return route.fulfill({json:[]});
+      return route.fulfill({json:{}});
+    });
+    await page.goto(base);await page.getByText('Prediction activity',{exact:true}).first().click();
+    await page.getByText('random-forest-v0.4:latest-bar-v1',{exact:true}).waitFor();
+    if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/version-desktop.png`});
+    await page.setViewportSize({width:390,height:844});
+    await page.getByText('random-forest-v0.4:latest-bar-v1',{exact:true}).scrollIntoViewIfNeeded();
+    if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/version-mobile.png`});
+    await page.getByText('Model evaluation',{exact:true}).first().click();
+    await page.getByText('Historical aggregate:',{exact:false}).waitFor();
+  });
   console.log(`${passed} startup browser regressions passed; all API responses mocked.`);
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
