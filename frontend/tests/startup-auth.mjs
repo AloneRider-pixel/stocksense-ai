@@ -169,6 +169,41 @@ try {
     await page.getByText('At least two scored records for the same symbol are needed',{exact:false}).waitFor();
     assert.equal(await page.getByRole('img',{name:'Predicted vs actual closes for INFY',exact:true}).count(),0);
   });
+  await scenario('manual sign-in recovery preserves fields and never retries on its own', async page => {
+    await page.addInitScript(()=>localStorage.removeItem('stocksense_token'));
+    let loginCalls=0,releaseFirst;
+    await page.route('**/api/v1/**',async route=>{
+      const p=new URL(route.request().url()).pathname;
+      if(p.endsWith('/auth/login')){
+        loginCalls++;
+        if(loginCalls===1){releaseFirst=()=>route.fulfill({status:503,json:{error:{message:'Fixture server not ready. Please retry manually.'}}});return;}
+        return route.fulfill({json:{access_token:'recovered-fixture-token'}});
+      }
+      if(p.endsWith('/auth/me'))return route.fulfill({json:{email:'fixture@example.invalid',full_name:'Fixture'}});
+      if(p.endsWith('/predictions')||p.endsWith('/symbols')||p.includes('/history'))return route.fulfill({json:[]});
+      return route.fulfill({json:{}});
+    });
+    await page.goto(base);await page.getByRole('button',{name:'Sign in',exact:true}).first().click();
+    await page.getByLabel('Email',{exact:true}).fill('fixture@example.invalid');
+    await page.getByLabel('Password',{exact:true}).fill('fixture-only-not-a-real-secret');
+    await page.getByRole('button',{name:'Sign in',exact:true}).click();
+    await page.getByRole('status').filter({hasText:'cold start can take several minutes'}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Working...',exact:true}).isDisabled(),true);
+    await page.clock.runFor(300000);assert.equal(loginCalls,1);
+    await page.getByRole('alert').filter({hasText:'We could not finish signing you in'}).waitFor();
+    await releaseFirst().catch(()=>{});
+    assert.equal(await page.getByLabel('Email',{exact:true}).inputValue(),'fixture@example.invalid');
+    assert.equal(await page.getByLabel('Password',{exact:true}).inputValue(),'fixture-only-not-a-real-secret');
+    assert.equal(await page.getByRole('button',{name:'Sign in',exact:true}).isEnabled(),true);
+    await page.getByLabel('Password',{exact:true}).fill('');
+    if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/auth-recovery-desktop.png`});
+    await page.setViewportSize({width:390,height:844});
+    if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/auth-recovery-mobile.png`});
+    await page.getByLabel('Password',{exact:true}).fill('fixture-only-not-a-real-secret');
+    await page.getByRole('button',{name:'Sign in',exact:true}).click();
+    await page.getByRole('button',{name:'Sign out',exact:true}).waitFor();
+    assert.equal(loginCalls,2);
+  });
   await scenario('landing distinguishes market history from supported forecasts and pooled results', async page => {
     await page.route('**/api/v1/**', async route => {
       const path=new URL(route.request().url()).pathname;
