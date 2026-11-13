@@ -12,7 +12,9 @@ export async function api(path, options = {}) {
   const response = await fetch(API_BASE + path, { ...options, headers });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.error?.message || "Request failed");
+    const error = new Error(body?.error?.message || "Request failed");
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
