@@ -108,6 +108,14 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Install browser for offline startup regressions
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Test saved-session recovery with mocked API responses
+        working-directory: frontend
+        run: node tests/startup-auth.mjs
+
   reproducibility-evaluation:
     name: Reproducible sample-data evaluation
     needs: backend

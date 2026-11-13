@@ -14,19 +14,48 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [booting, setBooting] = useState(true);
 
+  const [bootError, setBootError] = useState("");
+  const [bootAttempt, setBootAttempt] = useState(0);
+
   useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    setBootError("");
     if (!localStorage.getItem("stocksense_token")) {
       setBooting(false);
-      return;
+      return () => { active = false; };
     }
-    api("/auth/me")
+    setBooting(true);
+    const timer = setTimeout(() => {
+      if (!active) return;
+      setBootError("The server is taking too long to check your saved login. Your session has not been cleared. Retry, or continue to the sign-in page.");
+      setBooting(false);
+      controller.abort();
+    }, 12000);
+    api("/auth/me", { signal: controller.signal })
       .then((me) => {
+        if (!active || controller.signal.aborted) return;
         setUser(me);
         setView("app");
       })
-      .catch(() => clearToken())
-      .finally(() => setBooting(false));
-  }, []);
+      .catch((error) => {
+        if (!active || controller.signal.aborted) return;
+        if (error.status === 401) {
+          clearToken();
+        } else {
+          setBootError("We could not check your saved login. Your session has not been cleared. Retry, or continue to the sign-in page.");
+        }
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        if (active && !controller.signal.aborted) setBooting(false);
+      });
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [bootAttempt]);
 
   async function login(email, password) {
     const result = await api("/auth/login", {
@@ -80,6 +109,24 @@ export default function App() {
     return <div className="boot-screen">Loading StockSense AI…</div>;
   }
 
+  if (bootError) {
+    return (
+      <main className="boot-screen">
+        <section className="boot-recovery" aria-labelledby="boot-recovery-title">
+          <h1 id="boot-recovery-title">We could not restore your session yet</h1>
+          <p role="alert">{bootError}</p>
+          <button className="btn-primary" type="button" onClick={() => setBootAttempt((attempt) => attempt + 1)}>Retry connection</button>
+          <button className="btn-outline" type="button" onClick={() => {
+            clearToken();
+            setBootError("");
+            setAuthMode("login");
+            setView("auth");
+          }}>Continue to sign in</button>
+        </section>
+      </main>
+    );
+  }
+
   if (view === "app" && user) {
     return (
       <>
@@ -124,4 +171,4 @@ export default function App() {
       demoError={demoError}
     />
   );
-}
+                                  }
