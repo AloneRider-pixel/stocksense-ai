@@ -15,6 +15,16 @@ MODEL_PATH = Path("models/stocksense_rf.joblib")
 REGISTRY_PATH = Path("models/registry.json")
 
 
+def inference_model_label(model_version: str | None) -> str:
+    """Preserve short labels and hash long identities within the existing DB limit."""
+    base = model_version or "random-forest-unknown"
+    suffix = ":latest-bar-v1"
+    if len(base) + len(suffix) <= 64:
+        return base + suffix
+    identity = sha256(base.encode()).hexdigest()[:16]
+    return base[:33] + ":" + identity + suffix
+
+
 class Predictor:
     def __init__(
         self,
@@ -94,7 +104,7 @@ class Predictor:
                 ((predicted_close - current_close) / current_close) * 100,
                 4,
             ),
-            "model": (model_version or "random-forest-unknown") + ":latest-bar-v1",
+            "model": inference_model_label(model_version),
             "cached": False,
         }
 
