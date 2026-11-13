@@ -13,7 +13,7 @@ export async function api(path, options = {}) {
   try {
     response = await fetch(API_BASE + path, {
       ...options, headers,
-      // A sleeping Free backend can need about a minute for first sign-in.
+      // Bound each attempt even when a cold start takes several minutes.
       signal: options.signal || AbortSignal.timeout(path === "/auth/login" || path === "/auth/register" ? 75000 : 20000),
     });
   } catch (err) {
