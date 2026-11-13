@@ -131,5 +131,23 @@ try {
     await page.getByText('Prediction stopped: market history does not match the selected symbol.').scrollIntoViewIfNeeded();
     if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/wrong-symbol-error-mobile.png`});
   });
+  await scenario('landing distinguishes market history from supported forecasts and pooled results', async page => {
+    await page.route('**/api/v1/**', async route => {
+      const path=new URL(route.request().url()).pathname;
+      if(path.endsWith('/auth/me'))return route.fulfill({status:401,json:{error:{message:'Expired fixture'}}});
+      if(path.endsWith('/public/accuracy'))return route.fulfill({json:{overall:{evaluated_predictions:2,directional_accuracy_pct:50,mae:1.2},symbols:[]}});
+      if(path.endsWith('/public/predictions/latest'))return route.fulfill({json:{predictions:[]}});
+      return route.fulfill({json:{symbols:[]}});
+    });
+    await page.goto(base);
+    await page.getByRole('heading',{name:'Market history and supported NSE-equity forecasts.'}).waitFor({timeout:3000});
+    assert.equal(await page.getByText('Next-trading-day forecasts for NSE, metals and INR pairs,',{exact:false}).count(),0);
+    await page.getByText('zero-volume gold, silver and FX predictions are not supported.',{exact:false}).waitFor();
+    await page.getByText('pooled all-symbol statistics.',{exact:false}).waitFor();
+    await page.getByText('Pending forecasts, cached responses and failed saves are not new scored records.',{exact:false}).waitFor();
+    if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/landing-supported-desktop.png`});
+    await page.setViewportSize({width:390,height:844});
+    if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/landing-supported-mobile.png`,fullPage:true});
+  });
   console.log(`${passed} startup browser regressions passed; all API responses mocked.`);
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
