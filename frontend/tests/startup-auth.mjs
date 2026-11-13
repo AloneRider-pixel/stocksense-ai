@@ -131,6 +131,44 @@ try {
     await page.getByText('Prediction stopped: market history does not match the selected symbol.').scrollIntoViewIfNeeded();
     if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/wrong-symbol-error-mobile.png`});
   });
+  await scenario('dashboard separates stored/scored records and charts one symbol in its own currency', async page => {
+    const row=(id,symbol,day,actual)=>({id,symbol,prediction_date:day,predicted_close:1100+id,actual_close:actual,baseline_close:1090,percentage_error:0.1,model:'historical-v0.4'});
+    const records=[row(4,'INFY','2026-11-13',null),row(3,'INFY','2026-11-12',1105),row(2,'INFY','2026-11-11',1102),row(1,'RELIANCE','2026-11-11',1200)];
+    await page.route('**/api/v1/**',async route=>{
+      const u=new URL(route.request().url()),p=u.pathname;
+      if(p.endsWith('/auth/me'))return route.fulfill({json:{email:'fixture@example.invalid',full_name:'Fixture'}});
+      if(p.endsWith('/predictions')){assert.equal(u.searchParams.get('limit'),'100');return route.fulfill({json:records});}
+      if(p.endsWith('/predictions/evaluation'))return route.fulfill({json:{evaluated_predictions:3,directional_accuracy_pct:100,mae:98765,baseline_mae:87654,improvement_vs_persistence_pct:87.65,mape_pct:0.25}});
+      if(p.endsWith('/metrics'))return route.fulfill({json:{model_version:'sample-v0.4',trained_at:'2026-11-13T18:27:58Z',data_source:'csv:sample.csv',data_sha256:'a'.repeat(64),source_rows:180,test_rows:140,folds:5,mae:0.165}});
+      if(p.endsWith('/symbols'))return route.fulfill({json:[{symbol:'INFY',currency:'INR'},{symbol:'RELIANCE',currency:'INR'}]});
+      if(p.includes('/history'))return route.fulfill({json:[]});
+      return route.fulfill({json:{}});
+    });
+    await page.goto(base);
+    const stored=page.locator('article').filter({has:page.getByText('Stored records shown',{exact:true})});
+    await stored.getByText('4',{exact:true}).waitFor();
+    await page.getByText('3 scored records; pooled versions',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Every prediction gets graded.',{exact:true}).count(),0);
+    await page.getByText('Model evaluation',{exact:true}).first().click();
+    await page.getByRole('img',{name:'Predicted vs actual closes for INFY',exact:true}).waitFor();
+    await page.getByText('INFY · INR · 2 scored records shown',{exact:true}).waitFor();
+    assert.equal(await page.locator('svg[aria-label="Predicted vs actual closes for INFY"]').textContent().then(t=>t.includes('$')),false);
+    assert.equal(await page.locator('svg[aria-label="Predicted vs actual closes for INFY"]').textContent().then(t=>t.includes('₹')),true);
+    await page.getByText('Model label: sample-v0.4.',{exact:false}).waitFor();
+    await page.getByText('Per symbol only',{exact:true}).waitFor();
+    await page.getByText('0.25%',{exact:true}).waitFor();
+    assert.equal((await page.locator('body').textContent()).includes('98765'),false);
+    assert.equal((await page.locator('body').textContent()).includes('87654'),false);
+    assert.equal((await page.locator('body').textContent()).includes('+87.65%'),false);
+    await page.getByText('This identifies the evaluation data, not the deployed model', {exact:false}).waitFor();
+    if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/dashboard-records-desktop.png`,fullPage:true});
+    await page.setViewportSize({width:390,height:844});
+    await page.getByLabel('Chart symbol').scrollIntoViewIfNeeded();
+    if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/dashboard-records-mobile.png`});
+    await page.getByLabel('Chart symbol').selectOption('RELIANCE');
+    await page.getByText('At least two scored records for the same symbol are needed',{exact:false}).waitFor();
+    assert.equal(await page.getByRole('img',{name:'Predicted vs actual closes for INFY',exact:true}).count(),0);
+  });
   await scenario('landing distinguishes market history from supported forecasts and pooled results', async page => {
     await page.route('**/api/v1/**', async route => {
       const path=new URL(route.request().url()).pathname;
