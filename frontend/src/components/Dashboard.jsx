@@ -134,7 +134,7 @@ export default function Dashboard({ user, onSignOut }) {
 
   useEffect(() => {
     api("/watchlist").then((w) => setWatchlist(w.symbols || [])).catch(() => {});
-    api("/predictions?limit=20").then(setHistory).catch(() => setHistory([]));
+    api("/predictions?limit=100").then(setHistory).catch(() => setHistory([]));
     api("/predictions/evaluation").then(setEvaluation).catch(() => setEvaluation(null));
     api("/metrics").then((m) => {
       if (m && m.status !== "not_available") setOfflineMetrics(m);
@@ -170,7 +170,7 @@ export default function Dashboard({ user, onSignOut }) {
         }),
       });
       setPrediction(result);
-      setHistory(await api("/predictions?limit=20"));
+      setHistory(await api("/predictions?limit=100"));
       setEvaluation(await api("/predictions/evaluation"));
     } catch (err) {
       setError(err.message);
@@ -275,9 +275,9 @@ export default function Dashboard({ user, onSignOut }) {
               <article><span>Latest close · {symbol}</span><strong>{market ? fmtPrice(currency, market.close) : "—"}</strong><small>{market ? market.date : marketLoading ? "Loading market data" : "Market data unavailable"}</small></article>
               <article><span>Last session change</span><strong className={(dayChange ?? 0) >= 0 ? "positive" : "negative"}>{fmtPct(dayChange)}</strong><small>{prev ? "vs " + prev.date : ""}</small></article>
               <article><span>Model</span><strong>{prediction?.model || "Random Forest"}</strong><small>Next-period regression</small></article>
-              <article><span>Your predictions</span><strong>{history.length}</strong><small>Stored and scored</small></article>
-              <article><span>Directional accuracy</span><strong>{evaluation?.directional_accuracy_pct != null ? evaluation.directional_accuracy_pct.toFixed(1) + "%" : "—"}</strong><small>Measured, not claimed</small></article>
-              <article><span>Online MAE</span><strong>{evaluation?.mae != null ? Number(evaluation.mae).toFixed(3) : "—"}</strong><small>Realized prediction error</small></article>
+              <article><span>Stored records shown</span><strong>{history.length}</strong><small>Latest up to 100; pending included</small></article>
+              <article><span>Directional accuracy</span><strong>{evaluation?.directional_accuracy_pct != null ? evaluation.directional_accuracy_pct.toFixed(1) + "%" : "—"}</strong><small>{evaluation?.evaluated_predictions ?? 0} scored records; pooled versions</small></article>
+              <article><span>Online MAPE</span><strong>{evaluation?.mape_pct != null ? Number(evaluation.mape_pct).toFixed(2) + "%" : "—"}</strong><small>Percentage error; pooled scored versions</small></article>
             </section>
 
             <section className="panel chart-panel">
@@ -350,11 +350,12 @@ export default function Dashboard({ user, onSignOut }) {
 
               <article className="panel">
                 <p className="eyebrow">HOW THIS IS SCORED</p>
-                <h2>Every prediction gets graded.</h2>
+                <h2>Stored forecasts and scored results are different.</h2>
                 <p className="muted">
-                  When the real close for a predicted date lands, the platform stores it next to
-                  your prediction and updates measured accuracy and error. Nothing is deleted or
-                  restated. The record you see under Prediction activity is the whole record.
+                  Stored forecasts enter the measured results only after reconciliation with a
+                  matching realized close. Pending forecasts, cached responses and failed saves
+                  are not new scored records. Prediction activity shows this account's latest
+                  100 stored records, not a complete all-time export.
                 </p>
                 <p className="muted">
                   Offline model quality is evaluated with walk-forward windows: each period is
@@ -440,7 +441,8 @@ export default function Dashboard({ user, onSignOut }) {
         {tab === "activity" && (
           <section className="panel">
             <p className="eyebrow">PREDICTION ACTIVITY</p>
-            <h2>Your prediction record</h2>
+            <h2>Your latest stored predictions</h2>
+            <p className="muted small-print">Up to 100 recent records for this account, including pending forecasts. Aggregate evaluation can cover older stored records not shown here.</p>
             <p className="muted small-print">Records retain their original model version. Versions ending in latest-bar-v1 use the corrected latest-observed-bar inference. Older records, including acceptance-test forecasts, are not evidence of corrected-model accuracy.</p>
             <div className="table table-head">
               <span>Symbol · date</span><span>Predicted</span><span>Actual</span><span>Outcome</span>
@@ -466,10 +468,10 @@ export default function Dashboard({ user, onSignOut }) {
             <section className="metric-grid">
               <article><span>Evaluated predictions</span><strong>{evaluation?.evaluated_predictions ?? 0}</strong><small>With realized actuals</small></article>
               <article><span>Directional accuracy</span><strong>{evaluation?.directional_accuracy_pct != null ? evaluation.directional_accuracy_pct.toFixed(1) + "%" : "—"}</strong><small>Online, your record</small></article>
-              <article><span>Online MAE</span><strong>{evaluation?.mae != null ? Number(evaluation.mae).toFixed(3) : "—"}</strong><small>Realized error</small></article>
-              <article><span>Baseline MAE</span><strong>{evaluation?.baseline_mae != null ? Number(evaluation.baseline_mae).toFixed(3) : "—"}</strong><small>Last-close persistence</small></article>
+              <article><span>Online MAPE</span><strong>{evaluation?.mape_pct != null ? Number(evaluation.mape_pct).toFixed(2) + "%" : "—"}</strong><small>Percentage error, not price units</small></article>
+              <article><span>Absolute price error</span><strong>Per symbol only</strong><small>Account-wide MAE is not compared across price units</small></article>
               <article><span>Baseline hit rate</span><strong>{evaluation?.baseline_directional_accuracy_pct != null ? evaluation.baseline_directional_accuracy_pct.toFixed(1) + "%" : "—"}</strong><small>Always-up baseline</small></article>
-              <article><span>Vs persistence baseline</span><strong className={evaluation?.improvement_vs_persistence_pct != null ? (Number(evaluation.improvement_vs_persistence_pct) >= 0 ? "positive" : "negative") : ""}>{evaluation?.improvement_vs_persistence_pct != null ? fmtPct(evaluation.improvement_vs_persistence_pct) : "—"}</strong><small>Positive means the model wins</small></article>
+              <article><span>Vs persistence baseline</span><strong>See per-symbol MAPE</strong><small>Pooled absolute-error improvement is not shown</small></article>
               {offlineMetrics && offlineMetrics.mae != null && (
                 <article><span>Offline MAE</span><strong>{Number(offlineMetrics.mae).toFixed(3)}</strong><small>Walk-forward, sample dataset</small></article>
               )}
@@ -480,12 +482,21 @@ export default function Dashboard({ user, onSignOut }) {
                 <article><span>Vs last-close baseline</span><strong className={Number(offlineMetrics.improvement_vs_last_close_pct) >= 0 ? "positive" : "negative"}>{fmtPct(offlineMetrics.improvement_vs_last_close_pct)}</strong><small>Walk-forward, sample dataset</small></article>
               )}
             </section>
+            {offlineMetrics?.model_version && (
+              <section className="panel" style={{overflowWrap:"anywhere"}}>
+                <p className="eyebrow">OFFLINE EVALUATION PROVENANCE</p>
+                <h2>Sample-data evaluation, not live forecast accuracy.</h2>
+                <p className="muted">Model label: {offlineMetrics.model_version}. Generated: {offlineMetrics.trained_at || "not reported"}.</p>
+                <p className="muted">Data source: {offlineMetrics.data_source || "not reported"}. {offlineMetrics.source_rows ?? "Unknown"} source rows; {offlineMetrics.test_rows ?? "unknown"} evaluated rows; {offlineMetrics.folds ?? "unknown"} folds.</p>
+                <p className="muted small-print">Data SHA-256: {offlineMetrics.data_sha256 || "not reported"}. This identifies the evaluation data, not the deployed model's bytes. Regeneration time and model label do not prove artifact identity or corrected-inference performance.</p>
+              </section>
+            )}
             <section className="panel">
               <p className="eyebrow">PREDICTED VS ACTUAL</p>
-              <h2>Every scored prediction vs the naive baseline.</h2>
+              <h2>Scored records by symbol vs the naive baseline.</h2>
               <p className="muted small-print">Historical aggregate: these metrics can combine older and corrected inference versions. They do not measure the corrected version alone. Existing records are preserved, not rescored as corrected forecasts.</p>
-              <PredActualChart items={history} currency={currency} />
-              <p className="muted small-print">Only predictions with a realized close are drawn; pending ones are excluded, not hidden. The dashed line is last-close persistence - the model must beat it to add value. This chart reads the stored record on every load, so it updates as new closes land.</p>
+              <PredActualChart items={history} symbolMeta={symbolMeta} />
+              <p className="muted small-print">The chart uses recent stored records for one symbol at a time, in that symbol's reported currency. Pending records are excluded. The dashed line is last-close persistence. Account-wide aggregates above may include older records and mixed price units; compare percentage errors per symbol instead.</p>
             </section>
             {publicAccuracy && publicAccuracy.symbols?.length > 0 && (
               <section className="panel">
