@@ -73,11 +73,13 @@ try {
       const p=new URL(route.request().url()).pathname;
       if(p.endsWith('/auth/me'))return route.fulfill({json:{email:'fixture@example.invalid',full_name:'Fixture'}});
       if(p.endsWith('/predictions'))return route.fulfill({json:[{id:1,symbol:'INFY',prediction_date:'2026-11-13',predicted_close:1141,model:'random-forest-v0.4:latest-bar-v1'}]});
-      if(p.includes('/history')||p.endsWith('/symbols'))return route.fulfill({json:[]});
+      if(p.endsWith('/symbols'))return route.fulfill({json:[{symbol:'INFY',currency:'INR',exchange:'NSE'}]});
+      if(p.includes('/history'))return route.fulfill({json:[]});
       return route.fulfill({json:{}});
     });
     await page.goto(base);await page.getByText('Prediction activity',{exact:true}).first().click();
     await page.getByText('random-forest-v0.4:latest-bar-v1',{exact:true}).waitFor();
+    await page.getByText('₹1,141.00',{exact:true}).waitFor();
     if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/version-desktop.png`});
     await page.setViewportSize({width:390,height:844});
     await page.getByText('random-forest-v0.4:latest-bar-v1',{exact:true}).scrollIntoViewIfNeeded();
