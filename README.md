@@ -1,4 +1,4 @@
-# StockSense AI — Market Intelligence & Evaluation
+# StockSense AI - Market Intelligence & Evaluation
 
 [![CI](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/codeql.yml/badge.svg)](https://github.com/AloneRider-pixel/stocksense-ai/actions/workflows/codeql.yml)
@@ -7,21 +7,21 @@
 
 **Live demo:** [stocksense-ai-demo.onrender.com](https://stocksense-ai-demo.onrender.com) (one-click demo sign-in, no account setup)
 
-StockSense AI is an India-first model-evaluation sandbox: it makes next-trading-day close forecasts for the NIFTY 50 universe (NSE equities), precious metals (spot gold and silver), and INR currency pairs (USD/INR, EUR/INR, GBP/INR), stores every forecast, and scores each one against the real close when it lands.
+StockSense AI is an India-first model-evaluation sandbox: it displays market history for the NIFTY 50 universe (NSE equities), precious metals and INR currency pairs. Supported NSE-equity forecasts are stored and scored against observed closes. Gold, silver and FX predictions remain unsupported when source volume is zero; the app reports that limit rather than inventing volume.
 The point is not the model; it is the evaluation discipline: measured error is always reported next to naive baselines (last-close persistence) and the NIFTY 50 index over the same windows, and nothing is deleted or restated.
-Built solo by [Himanshu Bisht](https://github.com/AloneRider-pixel) to demonstrate a production-shaped FastAPI + React system with honest, chronological model evaluation.
+Built with friends, with backend and model-evaluation work by [Himanshu Bisht](https://github.com/AloneRider-pixel) to demonstrate a production-shaped FastAPI + React system with honest, chronological model evaluation.
 
 **Research and engineering project. Not investment advice. Not a SEBI-registered research analyst or investment adviser. Past model performance does not indicate future results. Do not trade on this.**
 
 **Stack:** FastAPI · PostgreSQL · Redis · scikit-learn · React/Vite · Docker · GitHub Actions
 
-**API:** [interactive docs (Swagger)](https://stocksense-ai-zvo7.onrender.com/docs) · [endpoint guide with real examples](docs/api.md)
+**API:** [endpoint guide with real examples](docs/api.md)
 
 ## Try it in 2 minutes
 
 1. Open the [live demo](https://stocksense-ai-demo.onrender.com). First load can take up to a minute on free-tier hosting.
 2. Click **Live dashboard** - one click signs you into the shared demo account.
-3. Pick an instrument pill (NIFTY 50 stock, gold, silver, or an INR pair) and press **Run prediction**, or open **Backtest** to see the model strategy vs buy-and-hold on real stored bars.
+3. Pick an instrument pill to inspect history. Use a supported NSE equity for **Run prediction**. Gold, silver and FX data can have zero volume, so predictions may be unavailable. Backtest is a historical simulation, not live performance.
 4. Check the landing-page track record: every prediction is stored and scored against the real close, next to naive baselines.
 
 ## Live demo
@@ -39,6 +39,7 @@ The demo serves real daily market data (Yahoo Finance for NSE equities, the NIFT
 
 ## Honest limits
 
+- **Prediction scope:** zero-volume Gold, silver and FX inputs are unsupported. Historical model versions remain visible; pooled all-symbol statistics are not evidence of per-symbol accuracy.
 - **Paper trading is a simulation:** fills use stored daily closes, not live quotes; there is no slippage, liquidity, or intraday execution model. It is practice software, not a trading system.
 - **Alerts are not real-time:** they evaluate only when new daily bars are ingested and only on close-to-close crossings. They can fire late or not at all if ingestion stalls, and they are not investment advice.
 
@@ -109,11 +110,28 @@ A credible model-quality claim should include:
 - the environment/model version; and
 - the producing commit or experiment artifact.
 
+## Verified results
+
+Local recheck on 2026-11-13: base commit `a765e44` with the dependency changes from PRs #94-96 (Python 3.12.15). These are local test results, not a claim about the deployed service. Commands are in [Verification](#verification).
+
+**Test suite**
+- 245 passed, 23 skipped (PostgreSQL-gated integration tests), 0 failed, ~28 seconds.
+- Local coverage without the PostgreSQL-gated paths: 83.38% of 3,237 statements. CI provisions PostgreSQL and enforces >=85% coverage.
+
+**Sample benchmark** (deterministic fixture - reproducibility evidence, not live forecast accuracy or financial performance)
+- Dataset: `data/sample_prices.csv` (180 rows; 140 scored rows across 5 walk-forward folds). The verifier checks the dataset hash against the generated metrics; it does not enforce a fixed historical digest, so regenerating the dataset and metrics requires reviewing these published results again.
+- Model: `ci-sample-v1`, produced by `python -m app.services.training --data-path data/sample_prices.csv --limit 1000 --model-version ci-sample-v1`.
+- MAE 0.1654, RMSE 0.2074, directional accuracy 85.0%; last-close baseline MAE 0.2995 (44.8% improvement over the baseline).
+- `python scripts/verify_sample_evidence.py` re-verifies the stored evidence artifact.
+
 ## Quick start
+
+**Prerequisites:** Python 3.11+ (3.12 was used for the verified results below), Node.js 22.12+ (CI uses 24) for the frontend, and Docker with the Compose plugin for the database and optional full-stack path.
 
 Backend:
 
 ```bash
+docker compose up -d postgres   # dev database matching the default dev DATABASE_URL
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
