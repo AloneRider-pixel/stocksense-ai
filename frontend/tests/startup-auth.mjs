@@ -1,16 +1,20 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { chromium } from 'playwright';
 
-const server = createServer(async (req, res) => {
-  try {
-    const path = req.url === '/' ? 'index.html' : req.url.split('?')[0].slice(1);
-    const data = await readFile(join('dist', path));
-    res.setHeader('Content-Type', ({'.js':'application/javascript','.css':'text/css','.html':'text/html'})[extname(path)] || 'application/octet-stream');
-    res.end(data);
-  } catch { res.writeHead(404).end(); }
+// Preload only build artifacts. Request paths never reach the filesystem.
+const artifacts = new Map([['/', {data: await readFile('dist/index.html'), type: 'text/html'}]]);
+for (const name of await readdir('dist/assets')) {
+  const type = ({'.js':'application/javascript','.css':'text/css'})[extname(name)] || 'application/octet-stream';
+  artifacts.set(`/assets/${name}`, {data: await readFile(join('dist/assets', name)), type});
+}
+const server = createServer((req, res) => {
+  const artifact = artifacts.get(req.url.split('?')[0]);
+  if (!artifact) { res.writeHead(404).end(); return; }
+  res.setHeader('Content-Type', artifact.type);
+  res.end(artifact.data);
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
