@@ -245,7 +245,7 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
           while the instance wakes.
         </p>
         <p className="muted">
-          Built solo by Himanshu Bisht · <a href={GITHUB_URL} target="_blank" rel="noreferrer">Source on GitHub</a>
+          Built by Himanshu Bisht with friends · <a href={GITHUB_URL} target="_blank" rel="noreferrer">Source on GitHub</a>
         </p>
       </footer>
     </div>
