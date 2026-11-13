@@ -101,9 +101,10 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
         {IS_DEMO && (
           <p className="hero-note">One click signs you in, no signup needed.</p>
         )}
-        {demoError && <div className="error">{demoError}</div>}
+        {demoBusy && <p className="warmup-note" role="status">Connecting to the demo. A sleeping server can take several minutes to start. This does not run a forecast.</p>}
+        {demoError && <div className="error" role="alert">{demoError}</div>}
         {warming && (
-          <p className="warmup-note">Waking up the server, first load can take up to a minute…</p>
+          <p className="warmup-note">Market data is taking longer to load. The server may be starting; this can take several minutes.</p>
         )}
 
         <div className="ticker-strip">
@@ -243,8 +244,8 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
         </div>
         <p>
           Research and engineering project. Not investment advice. Not a SEBI-registered research analyst or investment adviser. Past model performance does not indicate future results. Do not trade on this. Market data may be
-          delayed. This site runs on free-tier hosting; the first load can take up to a minute
-          while the instance wakes.
+          delayed. This site runs on free-tier hosting; a cold start can take several minutes.
+          If sign-in times out, wait a moment and retry manually.
         </p>
         <p className="muted">
           Built by Himanshu Bisht with friends · <a href={GITHUB_URL} target="_blank" rel="noreferrer">Source on GitHub</a>
