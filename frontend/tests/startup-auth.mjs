@@ -68,5 +68,49 @@ try {
     await page.getByRole('button',{name:'Retry connection'}).waitFor();
     assert.equal(await page.evaluate(()=>localStorage.getItem('stocksense_token')),'offline-fixture');
   });
+  await scenario('late previous-symbol responses cannot overwrite selected market data', async page => {
+    let lateAapl;
+    const bar=(symbol,close)=>({symbol,date:'2026-11-13',open:close,high:close+1,low:close-1,close,volume:100,source_provider:'fixture'});
+    await page.route('**/api/v1/**', async route => {
+      const path=new URL(route.request().url()).pathname;
+      if(path.endsWith('/auth/me'))return route.fulfill({json:{email:'fixture@example.invalid',full_name:'Fixture'}});
+      if(path.endsWith('/public/market-overview'))return route.fulfill({json:{symbols:[{symbol:'GOLD',name:'Gold',currency:'USD'}]}});
+      if(path.includes('/stocks/AAPL/history')){lateAapl=route;return;}
+      if(path.includes('/stocks/GOLD/history'))return route.fulfill({json:[bar('GOLD',5000)]});
+      if(path.includes('/indicators'))return route.fulfill({json:{}});
+      if(path.endsWith('/symbols'))return route.fulfill({json:[]});
+      if(path.endsWith('/predictions'))return route.fulfill({json:[]});
+      return route.fulfill({json:{}});
+    });
+    await page.goto(base);
+    await page.getByText('Latest close · GOLD').waitFor();
+    await page.getByText('$5,000.00',{exact:true}).waitFor();
+    assert.ok(lateAapl,'initial AAPL request captured');
+    await lateAapl.fulfill({json:[bar('AAPL',300)]});
+    await page.waitForTimeout(100);
+    assert.ok(await page.getByText('$5,000.00',{exact:true}).isVisible(),'late AAPL must not replace GOLD');
+    assert.equal(await page.getByText('$300.00',{exact:true}).count(),0);
+  });
+  await scenario('wrong-symbol history is shown as an error and cannot produce a prediction', async page => {
+    let writes=0;
+    await page.route('**/api/v1/**', async route => {
+      const path=new URL(route.request().url()).pathname;
+      if(path.endsWith('/auth/me'))return route.fulfill({json:{email:'fixture@example.invalid',full_name:'Fixture'}});
+      if(path.endsWith('/public/market-overview'))return route.fulfill({json:{symbols:[{symbol:'GOLD',name:'Gold',currency:'USD'}]}});
+      if(path.includes('/history'))return route.fulfill({json:Array.from({length:12},(_,i)=>({symbol:'AAPL',date:'2026-11-13',close:300,volume:100}))});
+      if(path.endsWith('/predict')){writes++;return route.fulfill({json:{}});}
+      if(path.endsWith('/predictions')||path.endsWith('/symbols'))return route.fulfill({json:[]});
+      return route.fulfill({json:{}});
+    });
+    await page.goto(base);
+    await page.getByText('Could not load GOLD price history: The server returned data for a different symbol.').waitFor();
+    await page.getByRole('button',{name:'Run prediction'}).click();
+    await page.getByText('Prediction stopped: market history does not match the selected symbol.').waitFor();
+    assert.equal(writes,0,'mismatched data must never be submitted as a forecast');
+    if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/wrong-symbol-error-desktop.png`});
+    await page.setViewportSize({width:390,height:844});
+    await page.getByText('Prediction stopped: market history does not match the selected symbol.').scrollIntoViewIfNeeded();
+    if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/wrong-symbol-error-mobile.png`});
+  });
   console.log(`${passed} startup browser regressions passed; all API responses mocked.`);
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
