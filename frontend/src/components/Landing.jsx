@@ -133,7 +133,7 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
         </div>
         <p className="ticker-source">
           {predictions.length > 0
-            ? "Latest stored forecasts · pending until matching realized closes are available"
+            ? "Latest stored forecasts · may include pending and scored records"
             : "Real market data · " + (overview?.data_source || "Twelve Data and Yahoo Finance daily bars") + " · may be delayed"}
         </p>
       </header>
