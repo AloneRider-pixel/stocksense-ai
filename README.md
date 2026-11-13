@@ -118,7 +118,7 @@ Measured at commit `8bbd89a` (Python 3.12). Commands are in [Verification](#veri
 - Local coverage without the PostgreSQL-gated paths: 83% of 3,230 statements. CI provisions PostgreSQL and enforces >=85% coverage.
 
 **Sample benchmark** (deterministic fixture - reproducibility evidence, not live forecast accuracy or financial performance)
-- Dataset: `data/sample_prices.csv` (sha256-pinned, 180 rows; 140 scored rows across 5 walk-forward folds).
+- Dataset: `data/sample_prices.csv` (180 rows; 140 scored rows across 5 walk-forward folds). The verifier checks the dataset hash against the generated metrics; it does not enforce a fixed historical digest, so regenerating the dataset and metrics requires reviewing these published results again.
 - Model: `ci-sample-v1`, produced by `python -m app.services.training --data-path data/sample_prices.csv --limit 1000 --model-version ci-sample-v1`.
 - MAE 0.1654, RMSE 0.2074, directional accuracy 85.0%; last-close baseline MAE 0.2995 (44.8% improvement over the baseline).
 - `python scripts/verify_sample_evidence.py` re-verifies the stored evidence artifact.
