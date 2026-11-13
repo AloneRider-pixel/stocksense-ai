@@ -48,6 +48,9 @@ export default function Dashboard({ user, onSignOut }) {
   const [symbols, setSymbols] = useState(FALLBACK_SYMBOLS);
   const [symbol, setSymbol] = useState(FALLBACK_SYMBOLS[0]);
   const [bars, setBars] = useState([]);
+  const [marketError, setMarketError] = useState("");
+  const [marketLoading, setMarketLoading] = useState(true);
+  const [marketAttempt, setMarketAttempt] = useState(0);
   const [prediction, setPrediction] = useState(null);
   const [history, setHistory] = useState([]);
   const [evaluation, setEvaluation] = useState(null);
@@ -101,16 +104,33 @@ export default function Dashboard({ user, onSignOut }) {
   }, []);
 
   useEffect(() => {
+    let current = true;
     setBars([]);
     setIndicators(null);
     setPrediction(null);
+    setError("");
+    setMarketError("");
+    setMarketLoading(true);
     api("/stocks/" + symbol + "/history?limit=150")
-      .then(setBars)
-      .catch(() => setBars([]));
+      .then((rows) => {
+        if (!current) return;
+        if (!Array.isArray(rows) || rows.some((row) => row.symbol !== symbol)) {
+          throw new Error("The server returned data for a different symbol.");
+        }
+        setBars(rows);
+      })
+      .catch((err) => {
+        if (current) {
+          setBars([]);
+          setMarketError("Could not load " + symbol + " price history: " + err.message);
+        }
+      })
+      .finally(() => { if (current) setMarketLoading(false); });
     api("/stocks/" + symbol + "/indicators?limit=150")
-      .then(setIndicators)
-      .catch(() => setIndicators(null));
-  }, [symbol]);
+      .then((result) => { if (current) setIndicators(result); })
+      .catch(() => { if (current) setIndicators(null); });
+    return () => { current = false; };
+  }, [symbol, marketAttempt]);
 
   useEffect(() => {
     api("/watchlist").then((w) => setWatchlist(w.symbols || [])).catch(() => {});
@@ -133,6 +153,12 @@ export default function Dashboard({ user, onSignOut }) {
     setError("");
     try {
       const hist = await api("/stocks/" + symbol + "/history?limit=100");
+      if (!Array.isArray(hist) || hist.some((bar) => bar.symbol !== symbol)) {
+        throw new Error("Prediction stopped: market history does not match the selected symbol.");
+      }
+      if (hist.some((bar) => Number(bar.volume) <= 0)) {
+        throw new Error("This model requires positive reported volume. Metals and FX feeds with zero or unavailable volume are not supported for predictions yet.");
+      }
       if (hist.length < 11) {
         throw new Error("Not enough market history is available for this symbol yet.");
       }
@@ -246,7 +272,7 @@ export default function Dashboard({ user, onSignOut }) {
         {tab === "overview" && (
           <>
             <section className="metric-grid">
-              <article><span>Latest close · {symbol}</span><strong>{market ? fmtPrice(currency, market.close) : "—"}</strong><small>{market ? market.date : "Loading market data"}</small></article>
+              <article><span>Latest close · {symbol}</span><strong>{market ? fmtPrice(currency, market.close) : "—"}</strong><small>{market ? market.date : marketLoading ? "Loading market data" : "Market data unavailable"}</small></article>
               <article><span>Last session change</span><strong className={(dayChange ?? 0) >= 0 ? "positive" : "negative"}>{fmtPct(dayChange)}</strong><small>{prev ? "vs " + prev.date : ""}</small></article>
               <article><span>Model</span><strong>{prediction?.model || "Random Forest"}</strong><small>Next-period regression</small></article>
               <article><span>Your predictions</span><strong>{history.length}</strong><small>Stored and scored</small></article>
@@ -280,7 +306,7 @@ export default function Dashboard({ user, onSignOut }) {
                     </>
                   )}
                   {visibleSymbols.map((s) => (
-                    <button key={s} className={"pill" + (s === symbol ? " active" : "")} onClick={() => setSymbol(s)}>{s}</button>
+                    <button key={s} className={"pill" + (s === symbol ? " active" : "")} onClick={() => setSymbol(s)} disabled={busy}>{s}</button>
                   ))}
                 </div>
               </div>
@@ -293,8 +319,9 @@ export default function Dashboard({ user, onSignOut }) {
                   >{label}</button>
                 ))}
               </div>
+              {marketError && <div className="error" role="alert">{marketError} <button className="ghost" onClick={() => setMarketAttempt((n) => n + 1)}>Retry market data</button></div>}
               <PriceChart bars={bars} indicators={indicators} overlays={overlays} currency={currency} />
-              <p className="chart-note">Source: {bars[0]?.source_provider === "csv-sample" ? "checked-in sample data" : (exchangeOf(symbol) === "NSE" ? "Yahoo Finance (NSE)" : "Twelve Data")} · daily bars · may be delayed · not investment advice</p>
+              <p className="chart-note">Source: {bars[0]?.source_provider === "csv-sample" ? "checked-in sample data" : (bars[0]?.source_provider === "yfinance_nse" ? "Yahoo Finance (NSE)" : bars[0]?.source_provider === "twelve_data" ? "Twelve Data" : bars[0]?.source_provider === "metals_fx" ? "Metals/FX provider (Twelve Data with Yahoo fallback)" : bars[0]?.source_provider || "no loaded source data")} · daily bars · may be delayed · not investment advice</p>
             </section>
 
             <section className="workspace">
@@ -414,6 +441,7 @@ export default function Dashboard({ user, onSignOut }) {
           <section className="panel">
             <p className="eyebrow">PREDICTION ACTIVITY</p>
             <h2>Your prediction record</h2>
+            <p className="muted small-print">Records retain their original model version. Versions ending in latest-bar-v1 use the corrected latest-observed-bar inference. Older records, including acceptance-test forecasts, are not evidence of corrected-model accuracy.</p>
             <div className="table table-head">
               <span>Symbol · date</span><span>Predicted</span><span>Actual</span><span>Outcome</span>
             </div>
@@ -421,7 +449,7 @@ export default function Dashboard({ user, onSignOut }) {
               {history.length === 0 && <div className="empty">No predictions yet. Run one from the Overview tab.</div>}
               {history.map((item) => (
                 <div className="row" key={item.id}>
-                  <span>{item.symbol} · {item.prediction_date}</span>
+                  <span>{item.symbol} · {item.prediction_date}<small style={{display:"block",overflowWrap:"anywhere"}}>{item.model || "unversioned historical record"}</small></span>
                   <span>{fmtPrice(symbolMeta[item.symbol]?.currency, item.predicted_close)}</span>
                   <span>{item.actual_close ? fmtPrice(symbolMeta[item.symbol]?.currency, item.actual_close) : "Pending"}</span>
                   <span className={item.actual_close ? (item.percentage_error <= 2 ? "positive" : "negative") : ""}>
@@ -455,6 +483,7 @@ export default function Dashboard({ user, onSignOut }) {
             <section className="panel">
               <p className="eyebrow">PREDICTED VS ACTUAL</p>
               <h2>Every scored prediction vs the naive baseline.</h2>
+              <p className="muted small-print">Historical aggregate: these metrics can combine older and corrected inference versions. They do not measure the corrected version alone. Existing records are preserved, not rescored as corrected forecasts.</p>
               <PredActualChart items={history} currency={currency} />
               <p className="muted small-print">Only predictions with a realized close are drawn; pending ones are excluded, not hidden. The dashed line is last-close persistence - the model must beat it to add value. This chart reads the stored record on every load, so it updates as new closes land.</p>
             </section>

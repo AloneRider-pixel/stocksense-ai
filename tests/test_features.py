@@ -56,3 +56,19 @@ def test_training_frame_does_not_cross_contaminate_symbols() -> None:
     assert bbb.loc[0, "return_1d"] == pytest.approx(1 / 1008)
     assert bbb.loc[0, "return_5d"] == pytest.approx(5 / 1004)
     assert bbb.loc[0, "target"] == pytest.approx(1010.0 / 1009.0)
+
+def test_inference_uses_final_observed_close_without_future_target():
+    history=[{"date":f"2026-10-{i+1:02d}","close":100+i,"volume":100+i} for i in range(11)]
+    before=build_prediction_features(history)
+    history[-1]["close"]=1000
+    after=build_prediction_features(history)
+    assert before != after
+    assert after[0] == pytest.approx(1000/109-1)
+
+def test_training_frame_still_drops_unobserved_target():
+    frame=sample_frame(24)
+    trained=build_training_frame(frame)
+    inference=build_training_frame(frame,require_target=False)
+    assert len(inference)==len(trained)+1
+    assert inference.iloc[-1]["close"]==frame.iloc[-1]["close"]
+    assert pd.isna(inference.iloc[-1]["target"])

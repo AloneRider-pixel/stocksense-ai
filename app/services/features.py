@@ -14,7 +14,7 @@ FEATURE_COLUMNS = [
 ]
 
 
-def build_training_frame(df: pd.DataFrame) -> pd.DataFrame:
+def build_training_frame(df: pd.DataFrame, *, require_target: bool = True) -> pd.DataFrame:
     required = {"close", "volume"}
     missing = required - set(df.columns)
     if missing:
@@ -78,7 +78,7 @@ def build_training_frame(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     return frame.dropna(
-        subset=FEATURE_COLUMNS + ["target"]
+        subset=FEATURE_COLUMNS + (["target"] if require_target else [])
     ).reset_index(drop=True)
 
 
@@ -102,7 +102,7 @@ def build_prediction_features(
     if (frame["close"] <= 0).any() or (frame["volume"] <= 0).any():
         raise ValueError("close and volume must be positive")
 
-    training_frame = build_training_frame(frame)
+    training_frame = build_training_frame(frame, require_target=False)
     if training_frame.empty:
         raise ValueError("Not enough valid history after feature construction")
 

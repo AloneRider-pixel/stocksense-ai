@@ -9,7 +9,17 @@ export async function api(path, options = {}) {
 
   if (token) headers.Authorization = "Bearer " + token;
 
-  const response = await fetch(API_BASE + path, { ...options, headers });
+  let response;
+  try {
+    response = await fetch(API_BASE + path, {
+      ...options, headers,
+      // A sleeping Free backend can need about a minute for first sign-in.
+      signal: options.signal || AbortSignal.timeout(path === "/auth/login" || path === "/auth/register" ? 75000 : 20000),
+    });
+  } catch (err) {
+    if (err.name === "TimeoutError") throw new Error("The server took too long to respond. Please retry.");
+    throw err;
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     const error = new Error(body?.error?.message || "Request failed");
