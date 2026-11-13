@@ -17,12 +17,12 @@ const STEPS = [
   {
     n: "03",
     title: "Model",
-    body: "A scikit-learn model turns those features into a next-period close prediction, served and stored through the API.",
+    body: "A scikit-learn model produces next-period NSE-equity close estimates from supported positive-volume input. Zero-volume gold, silver and FX inputs are not supported for predictions.",
   },
   {
     n: "04",
     title: "Reconcile",
-    body: "When the real close lands, every stored prediction is scored against it. Hit rate and error are measured, never claimed.",
+    body: "Stored predictions can be scored once matching realized closes are available. Only reconciled records enter the reported statistics; pending forecasts are not scored results.",
   },
 ];
 
@@ -64,8 +64,8 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
 
   const stats = [
     { label: "Predictions scored", value: scored > 0 ? String(scored) : null, hint: "reconciled vs real closes" },
-    { label: "Model hit rate", value: overall.directional_accuracy_pct != null ? Number(overall.directional_accuracy_pct).toFixed(1) + "%" : null, hint: "direction correct" },
-    { label: "Mean absolute error", value: overall.mae != null ? Number(overall.mae).toFixed(2) : null, hint: "per prediction, in price" },
+    { label: "Pooled model hit rate", value: overall.directional_accuracy_pct != null ? Number(overall.directional_accuracy_pct).toFixed(1) + "%" : null, hint: "all scored symbols and versions" },
+    { label: "Pooled mean absolute error", value: overall.mae != null ? Number(overall.mae).toFixed(2) : null, hint: "may mix price units; not per-symbol accuracy" },
     { label: "Naive baseline hit rate", value: overall.baseline_directional_accuracy_pct != null ? Number(overall.baseline_directional_accuracy_pct).toFixed(1) + "%" : null, hint: "always-up guess, same period" },
   ];
 
@@ -86,11 +86,12 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
 
       <header className="hero">
         <p className="eyebrow">MARKET INTELLIGENCE PLATFORM</p>
-        <h1>Next-trading-day forecasts for NSE, metals and INR pairs,<br />scored against real closes.</h1>
+        <h1>Market history and supported<br />NSE-equity forecasts.</h1>
         <p className="hero-sub">
-          An India-first model-evaluation sandbox: real market data in, next-close forecasts out,
-          and every single one reconciled against what actually happened, next to a last-close
-          baseline and the NIFTY 50 index. The numbers below are computed, not written.
+          Explore NSE, gold, silver and INR-pair history in a research sandbox. Forecasts
+          require supported positive-volume inputs: zero-volume gold, silver and FX
+          predictions are not supported. Stored forecasts are scored only when matching
+          realized closes are available.
         </p>
         <div className="hero-cta">
           <button className="btn-primary btn-hero" onClick={IS_DEMO ? onDemo : onRegister} disabled={demoBusy}>
@@ -132,7 +133,7 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
         </div>
         <p className="ticker-source">
           {predictions.length > 0
-            ? "Latest stored predictions · each one gets scored against the real close"
+            ? "Latest stored forecasts · pending until matching realized closes are available"
             : "Real market data · " + (overview?.data_source || "Twelve Data and Yahoo Finance daily bars") + " · may be delayed"}
         </p>
       </header>
@@ -140,11 +141,12 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
       <section className="section" id="proof">
         <p className="eyebrow">LIVE TRACK RECORD</p>
         <h2>Stored results, with limits.</h2>
-          <p className="muted">Historical figures can include older inference versions. They are not a separate validation of the corrected latest-bar-v1 inference or a measure of future returns.</p>
+          <p className="muted">Historical figures can include older inference versions and pooled all-symbol statistics. They are not per-symbol accuracy evidence, separate validation of corrected latest-bar-v1 inference, or a measure of future returns.</p>
         <p className="hero-sub">
-          Every prediction the API serves is stored when it is made and scored against the
-          next realized close. The baseline is an always-up naive guess over the same scored
-          predictions, so the model has to beat doing nothing clever to show value.
+          Only stored forecasts with matching realized closes count as scored results.
+          The directional baseline is an always-up guess over the same scored predictions;
+          the per-symbol table also compares percentage error with last-close persistence.
+          Pending forecasts, cached responses and failed saves are not new scored records.
         </p>
         <div className="stat-grid">
           {stats.map((s) => (
@@ -220,11 +222,11 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
       </section>
 
       <section className="section landing-final">
-        <h2>Judge the model by its track record.</h2>
+        <h2>Inspect the record, including its limits.</h2>
         <p className="hero-sub">
-          The dashboard shows measured hit rate and realized error for every prediction,
-          plus a walk-forward backtest against buy-and-hold. Create an account and your
-          own predictions get scored the same way.
+          The dashboard separates stored forecasts, reconciled results and historical
+          backtests. Small samples and older inference versions limit what the numbers
+          can show. Backtests and simulated trading are not live investment performance.
         </p>
         <div className="hero-cta">
           <button className="btn-primary btn-hero" onClick={IS_DEMO ? onDemo : onRegister} disabled={demoBusy}>
