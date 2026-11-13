@@ -708,3 +708,8 @@ aside nav a.active, aside nav a:hover { color: #edf4ff; background: #13223c; tex
   .header-side { gap: 8px; }
   .user-chip { max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
 }
+
+.boot-recovery { max-width: 40rem; padding: 2rem; text-align: center; color: #e7edf7; letter-spacing: normal; }
+.boot-recovery h1 { font-size: 1.5rem; }
+.boot-recovery p { line-height: 1.6; margin: 1rem 0; }
+.boot-recovery button { margin: .5rem; padding: .8rem 1rem; }
