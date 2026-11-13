@@ -24,11 +24,13 @@ export default function AuthScreen({ initialMode, busy, error, onSubmit, onDemo,
             : "Create your StockSense account."}
         </h1>
 
-        <form onSubmit={submit}>
+        <form onSubmit={submit} aria-busy={busy}>
           {mode === "register" && (
             <>
-              <label>Full name</label>
+              <label htmlFor="auth-name">Full name</label>
               <input
+                id="auth-name"
+                autoComplete="name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 maxLength={120}
@@ -36,16 +38,20 @@ export default function AuthScreen({ initialMode, busy, error, onSubmit, onDemo,
             </>
           )}
 
-          <label>Email</label>
+          <label htmlFor="auth-email">Email</label>
           <input
+            id="auth-email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             type="email"
             required
           />
 
-          <label>Password</label>
+          <label htmlFor="auth-password">Password</label>
           <input
+            id="auth-password"
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             type="password"
@@ -58,10 +64,12 @@ export default function AuthScreen({ initialMode, busy, error, onSubmit, onDemo,
           </button>
         </form>
 
-        {error && <div className="error">{error}</div>}
+        {busy && <p className="muted" role="status">Connecting to the server. A cold start can take several minutes. Your form stays here if the request times out; retry only when you are ready.</p>}
+        {error && <div className="error" role="alert">{error}</div>}
 
         <button
           className="switch-auth"
+          disabled={busy}
           onClick={() => setMode(mode === "login" ? "register" : "login")}
         >
           {mode === "login" ? "Create an account" : "Back to sign in"}
