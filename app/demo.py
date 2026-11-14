@@ -8,6 +8,8 @@ checked-in sample data; nothing here represents live market predictions.
 from __future__ import annotations
 
 import logging
+import time
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -31,6 +33,27 @@ logger = logging.getLogger(__name__)
 MODELS_DIR = Path("models")
 LIVE_MODEL_ROWS = 500
 LIVE_MODEL_MIN_ROWS = 120
+
+
+@contextmanager
+def _startup_phase(phase: str, *, symbol: str | None = None):
+    """Timing only: no provider/data/credential values or behavior changes."""
+    started = time.perf_counter()
+    logger.info("demo startup phase=%s symbol=%s status=started", phase, symbol or "-")
+    try:
+        yield
+    except BaseException as exc:
+        logger.warning(
+            "demo startup phase=%s symbol=%s status=failed duration_ms=%.1f error_type=%s",
+            phase, symbol or "-", (time.perf_counter() - started) * 1000,
+            type(exc).__name__,
+        )
+        raise
+    else:
+        logger.info(
+            "demo startup phase=%s symbol=%s status=complete duration_ms=%.1f",
+            phase, symbol or "-", (time.perf_counter() - started) * 1000,
+        )
 
 
 def _seed_market_data(session) -> int:
@@ -92,7 +115,8 @@ def _ingest_live_symbols(session) -> int:
                 continue
         provider = get_provider_for_symbol(symbol)
         try:
-            bars = provider.history(symbol, limit=LIVE_MODEL_ROWS)
+            with _startup_phase("provider_history", symbol=symbol):
+                bars = provider.history(symbol, limit=LIVE_MODEL_ROWS)
         except (TwelveDataError, YFinanceError, ValueError) as exc:
             logger.warning("demo seed: live ingestion failed for %s: %s", symbol, exc)
             continue
@@ -152,9 +176,11 @@ def _train_live_symbol_models(session) -> int:
             min_samples_leaf=2,
             n_jobs=-1,
         )
-        model.fit(frame[FEATURE_COLUMNS], frame["target"])
+        with _startup_phase("symbol_fit", symbol=symbol):
+            model.fit(frame[FEATURE_COLUMNS], frame["target"])
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
-        joblib.dump(model, model_path)
+        with _startup_phase("symbol_write", symbol=symbol):
+            joblib.dump(model, model_path)
         trained += 1
     return trained
 
@@ -165,7 +191,8 @@ def seed_demo_environment() -> None:
         logger.warning("DEMO_MODE ignored in production")
         return
 
-    init_db()
+    with _startup_phase("init_db"):
+        init_db()
     session = get_session()
     try:
         inserted = 0
@@ -173,11 +200,15 @@ def seed_demo_environment() -> None:
         if settings.market_data_provider.strip().lower() == "csv":
             # Only the CSV provider needs the checked-in sample data. With a
             # live provider configured, symbols are ingested on demand instead.
-            inserted = _seed_market_data(session)
+            with _startup_phase("sample_seed"):
+                inserted = _seed_market_data(session)
         else:
-            inserted = _ingest_live_symbols(session)
-            trained = _train_live_symbol_models(session)
-        _seed_demo_user(session)
+            with _startup_phase("live_ingest"):
+                inserted = _ingest_live_symbols(session)
+            with _startup_phase("live_models"):
+                trained = _train_live_symbol_models(session)
+        with _startup_phase("demo_user"):
+            _seed_demo_user(session)
         logger.info(
             "demo seed: %d bars upserted, %d live symbol models trained",
             inserted,
@@ -187,6 +218,7 @@ def seed_demo_environment() -> None:
         session.close()
 
     try:
-        _ensure_sample_model()
+        with _startup_phase("sample_model"):
+            _ensure_sample_model()
     except Exception:
         logger.exception("demo seed: sample model training failed")
