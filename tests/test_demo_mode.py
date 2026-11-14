@@ -63,7 +63,9 @@ def test_seed_demo_environment_skips_sample_data_with_live_provider(
     monkeypatch.setattr(demo, "_ensure_sample_model", lambda: None)
     monkeypatch.setattr(settings, "environment", "development")
     monkeypatch.setattr(settings, "market_data_provider", "twelve_data")
-    # No API key configured: ingestion fails fast and is skipped.
+    monkeypatch.setattr(demo, "_ingest_live_symbols", lambda session: 0)
+    monkeypatch.setattr(demo, "_train_live_symbol_models", lambda session: 0)
+    # This test checks the no-CSV branch, not actual provider calls.
     monkeypatch.setattr(settings, "twelve_data_api_key", "")
     monkeypatch.setattr(settings, "nse_symbols", "")
 
