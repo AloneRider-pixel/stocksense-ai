@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from dataclasses import replace
 
 from app.market_data.base import MarketBar
 from app.market_data.service import MarketDataService
@@ -127,3 +128,26 @@ def test_history_applies_limit_to_latest_bars():
     bars = service.history("DEMO", limit=3)
 
     assert [bar.date for bar in bars] == ["2025-01-05", "2025-01-06", "2025-01-07"]
+
+
+@pytest.mark.parametrize("field", ["open", "high", "low", "close", "volume"])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), True, "100"])
+def test_history_rejects_nonfinite_and_mistyped_values(field, value):
+    with pytest.raises(ValueError, match="non-finite or non-numeric"):
+        MarketDataService(FakeProvider([replace(make_bar("2025-01-02"), **{field: value})])).history("DEMO")
+
+
+def test_history_rejects_conflicting_duplicate_session():
+    with pytest.raises(ValueError, match="conflicting bars"):
+        MarketDataService(FakeProvider([make_bar("2025-01-02"), make_bar("2025-01-02", close=101)])).history("DEMO")
+
+
+@pytest.mark.parametrize("session", ["2025-02-30", "20250102", "not-a-date"])
+def test_history_rejects_invalid_session_dates(session):
+    with pytest.raises(ValueError, match="invalid session date"):
+        MarketDataService(FakeProvider([make_bar(session)])).history("DEMO")
+
+
+def test_history_rejects_fractional_volume():
+    with pytest.raises(ValueError, match="non-integral volume"):
+        MarketDataService(FakeProvider([make_bar("2025-01-02", volume=1.5)])).history("DEMO")
