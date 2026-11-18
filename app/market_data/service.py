@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import math
+from datetime import date
+
 from app.market_data.base import MarketBar, MarketDataProvider
 
 
@@ -20,15 +23,28 @@ class MarketDataService:
         if not bars:
             return []
 
-        seen_dates: set[str] = set()
+        seen_dates: dict[str, MarketBar] = {}
         validated: list[MarketBar] = []
 
         for bar in bars:
             if bar.symbol.upper() != normalized:
                 raise ValueError("Provider returned a mismatched symbol")
+            try:
+                if date.fromisoformat(bar.date).isoformat() != bar.date:
+                    raise ValueError("non-canonical date")
+            except (ValueError, TypeError):
+                raise ValueError("Provider returned an invalid session date") from None
+            for field in ("open", "high", "low", "close", "volume"):
+                value = getattr(bar, field)
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                    raise ValueError(f"Provider returned a non-finite or non-numeric {field}")
+            if int(bar.volume) != bar.volume:
+                raise ValueError("Provider returned a non-integral volume")
             if bar.date in seen_dates:
+                if bar != seen_dates[bar.date]:
+                    raise ValueError("Provider returned conflicting bars for the same session")
                 continue
-            seen_dates.add(bar.date)
+            seen_dates[bar.date] = bar
 
             if min(bar.open, bar.high, bar.low, bar.close) <= 0:
                 raise ValueError("Provider returned a non-positive price")

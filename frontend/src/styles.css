@@ -719,3 +719,16 @@ aside nav a.active, aside nav a:hover { color: #edf4ff; background: #13223c; tex
 .record-chart-scroll { max-width: 100%; overflow-x: auto; }
 .record-chart-scroll svg { display: block; min-width: 560px; }
 .record-chart-scroll:focus-visible, .chart-symbol-control select:focus-visible { outline: 2px solid #5b9dff; outline-offset: 3px; }
+
+/* Read-only provenance panel: avoid wide tables on mobile. */
+.data-health { max-width: 1080px; overflow-wrap: anywhere; }
+.data-health h2, .data-health h3 { margin: 0 0 14px; }
+.data-health p, .data-health li { line-height: 1.6; color: #c0cce0; }
+.data-health > p, .data-health > ul { margin-bottom: 22px; }
+.data-health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; margin: 24px 0; }
+.data-health-card { background: #101d30; border: 1px solid #30415b; border-radius: 12px; padding: 20px; min-width: 0; }
+.data-health-card dt { color: #9eacc2; margin-top: 12px; font-size: 13px; }
+.data-health-card dd { margin: 4px 0 0; color: #f2f6ff; }
+.data-health a { color: #91c2ff; text-decoration: underline; }
+.app-shell aside nav button { background: transparent; color: inherit; border: 0; text-align: left; padding: 10px 14px; cursor: pointer; font: inherit; }
+.app-shell aside nav button.active { background: #183452; border-radius: 8px; }

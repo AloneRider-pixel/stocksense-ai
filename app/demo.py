@@ -222,3 +222,4 @@ def seed_demo_environment() -> None:
             _ensure_sample_model()
     except Exception:
         logger.exception("demo seed: sample model training failed")
+        raise

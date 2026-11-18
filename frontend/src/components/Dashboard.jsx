@@ -9,6 +9,7 @@ import Scanner from "./Scanner";
 import Wallet from "./Wallet";
 import Alerts from "./Alerts";
 import NotificationBell from "./NotificationBell";
+import DataHealth from "./DataHealth";
 
 function fmtPct(v) {
   if (v == null) return "—";
@@ -24,6 +25,7 @@ function fmtPrice(currency, v) {
 
 const TAB_TITLES = {
   overview: "Overview",
+  datahealth: "Data health",
   watchlist: "Watchlist",
   scanner: "Scanner",
   screener: "Screener",
@@ -251,6 +253,7 @@ export default function Dashboard({ user, onSignOut }) {
           <a aria-current={tab === "backtest" ? "page" : undefined} className={tab === "backtest" ? "active" : ""} onClick={() => setTab("backtest")}>Backtest</a>
           <a aria-current={tab === "wallet" ? "page" : undefined} className={tab === "wallet" ? "active" : ""} onClick={() => setTab("wallet")}>Paper wallet</a>
           <a aria-current={tab === "alerts" ? "page" : undefined} className={tab === "alerts" ? "active" : ""} onClick={() => setTab("alerts")}>Alerts</a>
+          <button type="button" aria-current={tab === "datahealth" ? "page" : undefined} className={tab === "datahealth" ? "active" : ""} onClick={() => setTab("datahealth")}>Data health</button>
         </nav>
         {dataSource && <p className="aside-note">Market data: {dataSource}. May be delayed.</p>}
         <button className="ghost" onClick={onSignOut}>Sign out</button>
@@ -260,8 +263,8 @@ export default function Dashboard({ user, onSignOut }) {
         <header>
           <div>
             <p className="eyebrow">{(TAB_TITLES[tab] || "Overview").toUpperCase()}</p>
-            <h1>Good evening, {firstName}</h1>
-            <p className="muted">Real market data, model signals, and a scored prediction record.</p>
+            <h1>{tab === "datahealth" ? "Data evidence" : `Good evening, ${firstName}`}</h1>
+            <p className="muted">{tab === "datahealth" ? "Stored coverage, missing checks and source-use limits." : "Real market data, model signals, and a scored prediction record."}</p>
           </div>
           <div className="header-side">
             <NotificationBell />
@@ -388,6 +391,7 @@ export default function Dashboard({ user, onSignOut }) {
           </section>
         )}
 
+        {tab === "datahealth" && <DataHealth />}
         {tab === "scanner" && <Scanner />}
         {tab === "wallet" && <Wallet symbols={symbols} />}
         {tab === "alerts" && <Alerts symbols={symbols} />}

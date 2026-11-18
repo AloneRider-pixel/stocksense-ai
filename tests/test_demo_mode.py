@@ -148,3 +148,15 @@ def test_live_seed_ingests_and_trains_per_symbol_model(
     # last close (249.5 here), regardless of the absolute price level.
     last_close = history[-1]["close"]
     assert abs(result["predicted_close"] - last_close) / last_close < 0.05
+
+
+def test_sample_model_failure_is_not_reported_as_success(demo_session, monkeypatch):
+    import app.demo as demo
+
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "market_data_provider", "csv")
+    def fail():
+        raise RuntimeError("synthetic sample-model failure")
+    monkeypatch.setattr(demo, "_ensure_sample_model", fail)
+    with pytest.raises(RuntimeError, match="synthetic sample-model failure"):
+        demo.seed_demo_environment()
