@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 
 from app.core.config import settings
-from app.market_data.base import MarketBar
+from app.market_data.base import MarketBar, drop_incomplete_bars
 from app.market_data.symbols import describe_symbol
 
 
@@ -58,6 +58,8 @@ class YFinanceNSEProvider:
                             volume=int(row["Volume"]),
                         )
                     )
+                if info.provider == "yfinance_nse":  # registered NSE symbol; metals/FX filter in their own provider
+                    bars = drop_incomplete_bars(bars, exchange=info.exchange, timezone_name=info.timezone)
                 if not bars:
                     raise YFinanceError(f"No usable bars for {info.provider_symbol}")
                 return bars
