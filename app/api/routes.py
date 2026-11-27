@@ -682,7 +682,7 @@ def prediction_history(
         repository = PredictionRepository(session)
         records = repository.list_recent(
             user_id=current_user.id,
-            symbol=symbol.upper() if symbol else None,
+            symbol=(normalize_symbol(symbol) or None) if symbol else None,
             limit=limit,
         )
         baseline = repository.baseline_closes_for(records)
@@ -718,7 +718,7 @@ def prediction_evaluation(
         repository = PredictionRepository(session)
         return repository.evaluation_summary(
             user_id=current_user.id,
-            symbol=symbol.upper() if symbol else None,
+            symbol=(normalize_symbol(symbol) or None) if symbol else None,
         )
     except SQLAlchemyError as exc:
         raise HTTPException(
