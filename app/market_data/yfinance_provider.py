@@ -44,7 +44,8 @@ class YFinanceNSEProvider:
                 if frame is None or frame.empty:
                     raise YFinanceError(f"No data returned for {info.provider_symbol}")
                 bars: list[MarketBar] = []
-                for idx, row in frame.tail(limit).iterrows():
+                # A few extra rows: unfinished sessions are dropped below, and the caller still wants `limit`.
+                for idx, row in frame.tail(limit + 3).iterrows():
                     if row.isna().any():
                         continue
                     bars.append(
@@ -60,6 +61,7 @@ class YFinanceNSEProvider:
                     )
                 if info.provider == "yfinance_nse":  # registered NSE symbol; metals/FX filter in their own provider
                     bars = drop_incomplete_bars(bars, exchange=info.exchange, timezone_name=info.timezone)
+                    bars = bars[-limit:]
                 if not bars:
                     raise YFinanceError(f"No usable bars for {info.provider_symbol}")
                 return bars
