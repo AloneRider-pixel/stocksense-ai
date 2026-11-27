@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from app.market_data.symbols import describe_symbol
+from app.market_data.symbols import UnsupportedSymbolError, describe_symbol
 from app.services.indicators import rsi as rsi_series
 from app.services.indicators import sma as sma_series
 
@@ -33,7 +33,10 @@ def screen_universe(
     for symbol, bars in histories.items():
         if len(bars) < 21:
             continue
-        info = describe_symbol(symbol)
+        try:
+            info = describe_symbol(symbol)
+        except UnsupportedSymbolError:
+            continue  # one stored symbol the registry cannot place must not abort the other results
         if exchange and info.exchange != exchange.upper():
             continue
 

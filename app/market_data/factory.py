@@ -1,12 +1,26 @@
 from __future__ import annotations
 
 from app.core.config import settings
-from app.market_data.base import MarketDataProvider
+from app.market_data.base import MarketBar, MarketDataProvider, drop_incomplete_bars
 from app.market_data.csv_provider import CSVMarketDataProvider
 from app.market_data.metals_fx import MetalsFXProvider
 from app.market_data.symbols import describe_symbol
 from app.market_data.twelve_data import TwelveDataProvider
 from app.market_data.yfinance_provider import YFinanceNSEProvider
+
+
+class FinalBarsProvider:
+    """Wraps a live provider so a still-forming current-session bar is never stored as a daily close."""
+
+    def __init__(self, inner: MarketDataProvider) -> None:
+        self._inner = inner
+        self.name = getattr(inner, "name", inner.__class__.__name__)
+
+    def history(self, symbol: str, limit: int = 100) -> list[MarketBar]:
+        info = describe_symbol(symbol)
+        # Fetch a few extra bars: the newest ones may be dropped as not final, and the caller still wants `limit`.
+        bars = self._inner.history(symbol, limit=limit + 3)
+        return drop_incomplete_bars(bars, exchange=info.exchange, timezone_name=info.timezone)[-limit:]
 
 
 def get_market_data_provider() -> MarketDataProvider:
@@ -16,7 +30,7 @@ def get_market_data_provider() -> MarketDataProvider:
         return CSVMarketDataProvider()
 
     if provider == "twelve_data":
-        return TwelveDataProvider()
+        return FinalBarsProvider(TwelveDataProvider())
 
     raise ValueError(f"Unsupported market-data provider: {provider}")
 

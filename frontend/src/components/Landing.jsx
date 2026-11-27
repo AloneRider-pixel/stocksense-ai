@@ -133,9 +133,22 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
               ))}
         </div>
         <p className="ticker-source">
-          {predictions.length > 0
-            ? "Latest stored forecasts · may include pending and scored records"
-            : "Real market data · " + (overview?.data_source || "Twelve Data and Yahoo Finance daily bars") + " · may be delayed"}
+          {(() => {
+            const sampleNote = overview?.is_sample_data
+              ? "Sample data only (not live market data)"
+              : overview?.has_sample_data
+                ? "Includes sample data (not live market data)"
+                : null;
+            const notes = [sampleNote, overview?.has_unrecognized_source ? "Includes an unrecognized data source tag (unverified)" : null].filter(Boolean);
+            if (predictions.length > 0) {
+              const base = "Latest stored forecasts · may include pending and scored records";
+              return notes.length ? base + " · " + notes.join(" · ") : base;
+            }
+            if (notes.length) return notes.join(" · ");
+            return overview?.data_source
+              ? "Market data · " + overview.data_source + " · may be delayed"
+              : "No market data loaded yet";
+          })()}
         </p>
       </header>
 

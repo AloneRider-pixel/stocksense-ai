@@ -1,5 +1,16 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
+function validationMessage(body) {
+  const details = body?.error?.details;
+  if (body?.error?.code !== "VALIDATION_ERROR" || !Array.isArray(details) || !details.length) return "";
+  const parts = details.slice(0, 3).map((d) => {
+    const field = Array.isArray(d.loc) ? d.loc.filter((x) => x !== "body" && x !== "query").join(".") : "";
+    const msg = String(d.msg || "is invalid").replace(/^Value error, /, "");
+    return field ? field + ": " + msg : msg;
+  });
+  return "Please fix: " + parts.join("; ") + ".";
+}
+
 export async function api(path, options = {}) {
   const token = localStorage.getItem("stocksense_token");
   const headers = {
@@ -29,8 +40,9 @@ export async function api(path, options = {}) {
   }
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    const error = new Error(body?.error?.message || "Request failed");
+    const error = new Error(validationMessage(body) || body?.error?.message || "Request failed");
     error.status = response.status;
+    error.code = body?.error?.code || body?.detail?.code || "";
     throw error;
   }
   return response.json();

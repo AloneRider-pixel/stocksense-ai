@@ -13,7 +13,6 @@ from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-import joblib
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 
@@ -26,6 +25,7 @@ from app.market_data.factory import get_provider_for_symbol
 from app.market_data.twelve_data import TwelveDataError
 from app.market_data.yfinance_provider import YFinanceError
 from app.services.features import FEATURE_COLUMNS, build_training_frame
+from app.services.model_io import save_model
 from app.services.predictor import MODEL_PATH
 
 logger = logging.getLogger(__name__)
@@ -150,10 +150,10 @@ def _train_live_symbol_models(session) -> int:
     repository = MarketDataRepository(session)
     trained = 0
     for symbol in settings.all_symbol_list[: settings.demo_seed_max_symbols]:
-        model_path = MODELS_DIR / f"stocksense_rf_{symbol}.joblib"
+        model_path = MODELS_DIR / f"stocksense_rf_{symbol}.skops"
         if model_path.exists():
             continue
-        rows = repository.list_history(symbol, limit=LIVE_MODEL_ROWS)
+        rows = repository.list_history_excluding_open_session(symbol, limit=LIVE_MODEL_ROWS)
         if len(rows) < LIVE_MODEL_MIN_ROWS:
             continue
         frame = build_training_frame(
@@ -180,7 +180,7 @@ def _train_live_symbol_models(session) -> int:
             model.fit(frame[FEATURE_COLUMNS], frame["target"])
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         with _startup_phase("symbol_write", symbol=symbol):
-            joblib.dump(model, model_path)
+            save_model(model, model_path)
         trained += 1
     return trained
 

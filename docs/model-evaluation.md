@@ -55,7 +55,7 @@ Outputs:
     models/metrics.json
     models/registry.json
     models/walk_forward_predictions.csv
-    models/stocksense_rf.joblib
+    models/stocksense_rf.skops
 
 The source, model version, feature set, row count, evaluation metrics, and training timestamp are recorded in the registry.
 

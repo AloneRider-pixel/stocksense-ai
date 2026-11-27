@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -91,6 +93,52 @@ class MarketDataRepository:
         return list(reversed(rows))
 
 
+    def list_history_excluding_open_session(self, symbol: str, limit: int = 500, now: datetime | None = None) -> list[MarketBarRecord]:
+        """Stored bars minus the CURRENT (possibly still running) session.
+
+        Same exchange-aware rule the ingestion filter uses (drop_incomplete_bars). This only removes a bar
+        that is open right now. It does NOT show that older stored bars were refreshed after their close:
+        ingested_at is the first insert and overwrites do not move it, so a partial bar captured on an
+        earlier day and never refetched still passes. Treat the result as "not known to be open", not final.
+        An unsupported symbol returns no rows.
+        """
+        from app.market_data.base import MarketBar, drop_incomplete_bars
+        from app.market_data.symbols import UnsupportedSymbolError, describe_symbol
+
+        rows = self.list_history(symbol, limit=limit + 3)  # spare rows: the current (and for rolling markets the previous) day may be dropped
+        try:
+            info = describe_symbol(symbol)
+        except UnsupportedSymbolError:
+            return []
+        stamps = [
+            MarketBar(date=r.date.isoformat(), symbol=r.symbol, open=0.0, high=0.0, low=0.0, close=0.0, volume=0)
+            for r in rows
+        ]
+        keep = {b.date for b in drop_incomplete_bars(stamps, exchange=info.exchange, timezone_name=info.timezone, now=now)}
+        return [r for r in rows if r.date.isoformat() in keep][-limit:]
+
+
+def finality_metadata(rows: list[MarketBarRecord]) -> dict[str, object]:
+    """As-of facts about the newest row in the list passed in. Finality is explicitly UNKNOWN: not a safety guard.
+
+    first_stored_at is when the row was FIRST inserted; an overwrite does not move it, so it does not say when the
+    close shown was captured. Pass the rows the caller actually used or displayed."""
+    if not rows:
+        return {"latest_bar_date": None, "source_provider": None, "first_stored_at": None, "confirmed_final": None}
+    last = rows[-1]
+    first = last.ingested_at.isoformat() if last.ingested_at is not None else None
+    return {
+        "latest_bar_date": last.date.isoformat(),
+        "source_provider": last.source_provider,
+        "first_stored_at": first,
+        "confirmed_final": None,
+        "note": (
+            "Not confirmed final. The latest stored bar may have been captured before the close and not refreshed; "
+            "only a bar that is open right now is excluded from analysis."
+        ),
+    }
+
+
 class PredictionRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -141,6 +189,18 @@ class PredictionRepository:
 
         return list(self.session.scalars(stmt).all())
 
+    @staticmethod
+    def _is_completed_bar(bar: MarketBarRecord) -> bool:
+        from app.market_data.base import MarketBar, drop_incomplete_bars
+        from app.market_data.symbols import UnsupportedSymbolError, describe_symbol
+
+        try:
+            info = describe_symbol(bar.symbol)
+        except UnsupportedSymbolError:
+            return False
+        stamp = MarketBar(date=bar.date.isoformat(), symbol=bar.symbol, open=0.0, high=0.0, low=0.0, close=0.0, volume=0)
+        return bool(drop_incomplete_bars([stamp], exchange=info.exchange, timezone_name=info.timezone))
+
     def evaluate_pending(self, symbol: str | None = None) -> int:
         stmt = select(PredictionRecord).where(PredictionRecord.actual_date.is_(None))
 
@@ -149,6 +209,7 @@ class PredictionRepository:
 
         predictions = list(self.session.scalars(stmt).all())
         evaluated = 0
+        self.last_unevaluable: list[str] = []  # symbols with pending predictions that can never be scored here
 
         for prediction in predictions:
             actual = self.session.scalar(
@@ -163,6 +224,13 @@ class PredictionRepository:
 
             if actual is None:
                 continue
+            if lookup_symbol_supported(actual.symbol) is False:
+                if prediction.symbol not in self.last_unevaluable:
+                    self.last_unevaluable.append(prediction.symbol)
+                    logging.getLogger(__name__).warning("Prediction for unsupported symbol %s cannot be evaluated", prediction.symbol)
+                continue
+            if not self._is_completed_bar(actual):
+                continue  # next bar is the running session: wait, do not score against a moving close
 
             previous_close = self.session.scalar(
                 select(MarketBarRecord.close)
@@ -198,12 +266,36 @@ class PredictionRepository:
         return evaluated
 
 
+    def unevaluable_pending(self, *, user_id: int, symbol: str | None = None) -> dict[str, object]:
+        """Pending predictions whose symbol this app cannot score (e.g. non-NSE). They never enter the metrics."""
+        stmt = select(PredictionRecord).where(
+            PredictionRecord.user_id == user_id,
+            PredictionRecord.actual_date.is_(None),
+        )
+        if symbol:
+            stmt = stmt.where(PredictionRecord.symbol == symbol.upper())
+        rows = [r for r in self.session.scalars(stmt).all() if lookup_symbol_supported(r.symbol) is False]
+        return {
+            "pending_unevaluable": len(rows),
+            "pending_unevaluable_symbols": sorted({r.symbol for r in rows}),
+        }
+
     def evaluation_summary(
         self,
         *,
         user_id: int,
         symbol: str | None = None,
-    ) -> dict[str, float | int | None]:
+    ) -> dict[str, object]:
+        out = self._evaluation_metrics(user_id=user_id, symbol=symbol)
+        out.update(self.unevaluable_pending(user_id=user_id, symbol=symbol))
+        return out
+
+    def _evaluation_metrics(
+        self,
+        *,
+        user_id: int,
+        symbol: str | None = None,
+    ) -> dict[str, object]:
         stmt = select(PredictionRecord).where(
             PredictionRecord.user_id == user_id,
             PredictionRecord.actual_close.is_not(None),
@@ -546,3 +638,13 @@ class WatchlistRepository:
         )
         self.session.commit()
         return deleted > 0
+
+
+def lookup_symbol_supported(symbol: str) -> bool:
+    from app.market_data.symbols import UnsupportedSymbolError, describe_symbol
+
+    try:
+        describe_symbol(symbol)
+    except UnsupportedSymbolError:
+        return False
+    return True

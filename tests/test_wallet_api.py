@@ -166,3 +166,14 @@ def test_users_cannot_see_each_others_wallet(client, session_factory):
     ).json()
     assert summary_b["cash"] == "1000000.00"
     assert summary_b["positions"] == []
+
+
+def test_paper_orders_reject_non_nse_symbols_with_unsupported_symbol_code(client, auth_headers, session_factory):
+    """Route-level proof: US equity, metals and FX are rejected (not IST-gated) even when a bar exists."""
+    headers, _user = auth_headers
+    for sym in ("AAPL", "GOLD", "USDINR"):
+        _bar(session_factory(), sym, date(2026, 10, 30), 100.0)
+        r = client.post("/api/v1/wallet/orders", headers=headers, json={"symbol": sym, "side": "buy", "quantity": 1})
+        assert r.status_code == 422, sym
+        assert "UNSUPPORTED_SYMBOL" in r.text, sym
+    assert client.get("/api/v1/wallet/orders", headers=headers).json()["orders"] == []

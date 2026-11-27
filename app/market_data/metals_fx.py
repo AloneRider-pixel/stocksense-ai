@@ -16,7 +16,8 @@ from __future__ import annotations
 from dataclasses import replace
 
 from app.core.config import settings
-from app.market_data.base import MarketBar
+from app.market_data.base import MarketBar, drop_incomplete_bars
+from app.market_data.symbols import describe_symbol
 from app.market_data.twelve_data import TwelveDataError, TwelveDataProvider
 from app.market_data.yfinance_provider import YFinanceError, YFinanceNSEProvider
 
@@ -28,6 +29,10 @@ METALS_FX_SYMBOLS: dict[str, tuple[str, str]] = {
     "EURINR": ("EUR/INR", "EURINR=X"),
     "GBPINR": ("GBP/INR", "GBPINR=X"),
 }
+
+
+# Fetch a few extra bars: the newest ones may be dropped as not final, and the caller still wants `limit`.
+_HOLD_BACK_BARS = 3
 
 
 class MetalsFXProvider:
@@ -45,13 +50,22 @@ class MetalsFXProvider:
 
         if settings.twelve_data_api_key:
             try:
-                bars = self._twelve_data.history(td_symbol, limit=limit)
-                return [self._as_display_symbol(bar, normalized) for bar in bars]
-            except TwelveDataError:
-                pass  # fall through to Yahoo
+                bars = self._twelve_data.history(td_symbol, limit=limit + _HOLD_BACK_BARS)
+                return self._final_only([self._as_display_symbol(bar, normalized) for bar in bars], normalized)[-limit:]
+            except (TwelveDataError, YFinanceError):
+                pass  # fall through to Yahoo (also when every Twelve Data bar is still unfinished)
 
-        bars = self._yfinance.history(yf_symbol, limit=limit)
-        return [self._as_display_symbol(bar, normalized) for bar in bars]
+        bars = self._yfinance.history(yf_symbol, limit=limit + _HOLD_BACK_BARS)
+        return self._final_only([self._as_display_symbol(bar, normalized) for bar in bars], normalized)[-limit:]
+
+    @staticmethod
+    def _final_only(bars: list[MarketBar], display_symbol: str) -> list[MarketBar]:
+        """Spot metals/FX trade around the clock: the current UTC date's bar is still forming."""
+        info = describe_symbol(display_symbol)
+        kept = drop_incomplete_bars(bars, exchange=info.exchange, timezone_name=info.timezone)
+        if not kept:
+            raise YFinanceError(f"No completed daily bars for {display_symbol}")
+        return kept
 
     @staticmethod
     def _as_display_symbol(bar: MarketBar, display_symbol: str) -> MarketBar:

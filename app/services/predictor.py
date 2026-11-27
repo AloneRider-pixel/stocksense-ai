@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import json
+import os
+import logging
+import re
 from hashlib import sha256
 from pathlib import Path
 
-import joblib
-import numpy as np
+import pandas as pd
 
 from app.core.config import settings
-from app.services.features import build_prediction_features
+from app.services.features import FEATURE_COLUMNS, build_prediction_features
+from app.services.model_io import ModelIncompatibleError, load_model
 
 
-MODEL_PATH = Path("models/stocksense_rf.joblib")
+MODEL_PATH = Path("models/stocksense_rf.skops")
 REGISTRY_PATH = Path("models/registry.json")
 
 
@@ -23,6 +26,41 @@ def inference_model_label(model_version: str | None) -> str:
         return base + suffix
     identity = sha256(base.encode()).hexdigest()[:16]
     return base[:33] + ":" + identity + suffix
+
+
+_SAFE_KEY = re.compile(r"^[A-Z0-9&^=.-]{1,32}$")
+logger = logging.getLogger(__name__)
+
+
+def check_model_compatible(model: object, source: str, registry_features: list[str] | None = None) -> None:
+    """Fail cleanly when a loaded artifact was fitted on different features.
+
+    Never retrains or rewrites the artifact: the caller gets an error and the
+    file on disk is left untouched. An artifact without fitted feature names is
+    accepted only when the registry records exactly the current feature list.
+    """
+    if not callable(getattr(model, "predict", None)):
+        raise ModelIncompatibleError(f"Model artifact {source} has no predict method.")
+    names = getattr(model, "feature_names_in_", None)
+    if names is not None and list(names) != list(FEATURE_COLUMNS):
+        raise ModelIncompatibleError(
+            f"Model artifact {source} was fitted on different features than this version builds. "
+            "Retrain it with the current training pipeline; it was not changed."
+        )
+    if names is None:
+        # No fitted feature names (e.g. trained on a bare array): trust only a registry that records
+        # exactly the current feature list. Otherwise the column order cannot be established.
+        if registry_features is None or list(registry_features) != list(FEATURE_COLUMNS):
+            raise ModelIncompatibleError(
+                f"Model artifact {source} has no recorded feature names and the registry does not confirm "
+                "the current feature list, so its column order cannot be verified. It was not changed."
+            )
+    count = getattr(model, "n_features_in_", None)
+    if count is not None and int(count) != len(FEATURE_COLUMNS):
+        raise ModelIncompatibleError(
+            f"Model artifact {source} expects {int(count)} features but this version builds "
+            f"{len(FEATURE_COLUMNS)}. Retrain it with the current training pipeline; it was not changed."
+        )
 
 
 class Predictor:
@@ -38,11 +76,13 @@ class Predictor:
     def _model_for(self, symbol: str) -> tuple[object, str]:
         """Resolve the model for a symbol.
 
-        Per-symbol live-trained artifacts (stocksense_rf_<SYMBOL>.joblib, written
+        Per-symbol live-trained artifacts (stocksense_rf_<SYMBOL>.skops, written
         by the demo seeder from ingested provider data) win over the global
         sample model so predictions stay in the symbol's price range.
         """
         key = symbol.upper()
+        if not _SAFE_KEY.match(key):
+            key = ""  # never build a file name from unexpected characters; use the global model
         if key in self._models:
             return self._models[key]
 
@@ -50,7 +90,7 @@ class Predictor:
         if key:
             candidates.append(
                 (
-                    self.model_path.with_name(f"stocksense_rf_{key}.joblib"),
+                    self.model_path.with_name(f"stocksense_rf_{key}.skops"),
                     f"random-forest-live-{key.lower()}",
                 )
             )
@@ -58,7 +98,8 @@ class Predictor:
 
         for path, version in candidates:
             if path.exists():
-                resolved = (joblib.load(path), version or self._load_model_version())
+                loaded = self._load_artifact(path)
+                resolved = (loaded, version or self._load_model_version())
                 self._models[key] = resolved
                 return resolved
 
@@ -70,9 +111,32 @@ class Predictor:
         from app.services.training import train_model
 
         train_model(model_path=str(self.model_path))
-        resolved = (joblib.load(self.model_path), self._load_model_version())
+        loaded = self._load_artifact(self.model_path)
+        resolved = (loaded, self._load_model_version())
         self._models[key] = resolved
         return resolved
+
+    def _registry_features(self) -> list[str] | None:
+        try:
+            features = json.loads(self.registry_path.read_text(encoding="utf-8")).get("features")
+        except (OSError, ValueError, TypeError, AttributeError):
+            return None
+        return list(features) if isinstance(features, list) else None
+
+    def _load_artifact(self, path: Path) -> object:
+        """Load a model file that sits next to the configured model path, then check its schema.
+
+        The file is read with skops and an explicit trusted-type list (see app/services/model_io.py), not
+        pickle. It must still resolve inside the model directory (no symlink or ".." escape) and be one this
+        service wrote: skops cannot make a tampered file safe to predict with (Tree is a trusted type).
+        """
+        root = os.path.realpath(self.model_path.absolute().parent)
+        safe_path = os.path.realpath(os.path.join(root, path.name))
+        if os.path.dirname(safe_path) != root or not safe_path.startswith(root + os.sep):
+            raise ModelIncompatibleError("Model artifact is outside the model directory and was not loaded.")
+        loaded = load_model(safe_path)
+        check_model_compatible(loaded, path.name, self._registry_features())
+        return loaded
 
     def _load_model_version(self) -> str:
         if not self.registry_path.exists():
@@ -91,7 +155,8 @@ class Predictor:
     ) -> dict[str, object]:
         model, model_version = self._model_for(symbol)
 
-        features = np.array([build_prediction_features(history)])
+        # Named columns in the same order the model was fitted with (FEATURE_COLUMNS), so sklearn can check them.
+        features = pd.DataFrame([build_prediction_features(history)], columns=FEATURE_COLUMNS)
         # The model predicts the next-period return ratio; convert to price.
         predicted_ratio = float(model.predict(features)[0])
         current_close = float(history[-1]["close"])

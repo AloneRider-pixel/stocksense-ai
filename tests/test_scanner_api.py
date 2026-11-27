@@ -88,8 +88,11 @@ def test_scanner_disabled_by_default(client, auth_headers, monkeypatch):
     headers, _ = auth_headers
     monkeypatch.setattr(scanner_routes.settings, "scanner_enabled", False)
     for path in ("coverage", "rs", "industries", "breadth", "breakouts", "changes", "scorecard", "stock/TCS"):
-        assert client.get(f"/api/v1/scanner/{path}", headers=headers).status_code == 403, path
-    assert client.post("/api/v1/scanner/backtest", json={"symbol": "TCS"}, headers=headers).status_code == 403
+        r = client.get(f"/api/v1/scanner/{path}", headers=headers)
+        assert r.status_code == 403, path
+        assert r.json()["error"]["code"] == "SCANNER_DISABLED", path
+    r = client.post("/api/v1/scanner/backtest", json={"symbol": "TCS"}, headers=headers)
+    assert r.status_code == 403 and r.json()["error"]["code"] == "SCANNER_DISABLED"
     assert client.post("/api/v1/scanner/refresh", headers=headers).status_code == 403
 
 

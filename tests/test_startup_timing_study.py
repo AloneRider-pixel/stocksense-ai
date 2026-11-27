@@ -5,7 +5,7 @@ import time
 import resource
 import numpy as np
 import pandas as pd
-import joblib
+from app.services.model_io import load_model
 from threadpoolctl import threadpool_limits
 from app import demo
 from app.core.config import settings
@@ -72,7 +72,7 @@ def test_offline_sixteen_symbol_and_sample_cold_warm_timing(session_factory, mon
                 assert trained == 16
                 predictions = np.array(
                     [
-                        joblib.load(out / f"stocksense_rf_{s}.joblib").predict(
+                        load_model(out / f"stocksense_rf_{s}.skops").predict(
                             frame[FEATURE_COLUMNS]
                         )
                         for s in symbols
@@ -88,7 +88,7 @@ def test_offline_sixteen_symbol_and_sample_cold_warm_timing(session_factory, mon
                 assert warm == 0
                 start = time.perf_counter()
                 train_model(
-                    model_path=str(out / "sample.joblib"),
+                    model_path=str(out / "sample.skops"),
                     registry_path=str(out / "registry.json"),
                     metrics_path=str(out / "metrics.json"),
                     predictions_path=str(out / "evaluation.csv"),
