@@ -102,3 +102,14 @@ def test_production_rejects_url_encoded_weak_database_password() -> None:
 def test_production_rejects_unencrypted_or_local_redis(redis_url: str) -> None:
     with pytest.raises(RuntimeError, match="REDIS_URL"):
         production_settings(redis_url=redis_url)
+
+
+@pytest.mark.parametrize("alias", ["prod", "PROD", " live ", "prd", "release"])
+def test_near_miss_production_names_are_refused_not_treated_as_development(alias: str) -> None:
+    with pytest.raises(Exception, match="not exactly 'production'"):
+        Settings(_env_file=None, environment=alias)
+
+
+@pytest.mark.parametrize("name", ["development", "test", "staging"])
+def test_other_environment_names_keep_their_existing_behaviour(name: str) -> None:
+    assert Settings(_env_file=None, environment=name).environment == name
