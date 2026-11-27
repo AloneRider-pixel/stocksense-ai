@@ -88,7 +88,7 @@ try {
     await page.getByText('Historical aggregate:',{exact:false}).waitFor();
   });
   await scenario('late previous-symbol responses cannot overwrite selected market data', async page => {
-    let lateAapl;
+    let lateAapl=null;
     const bar=(symbol,close)=>({symbol,date:'2026-11-13',open:close,high:close+1,low:close-1,close,volume:100,source_provider:'fixture'});
     await page.route('**/api/v1/**', async route => {
       const path=new URL(route.request().url()).pathname;
@@ -104,11 +104,133 @@ try {
     await page.goto(base);
     await page.getByText('Latest close · GOLD').waitFor();
     await page.getByText('$5,000.00',{exact:true}).waitFor();
-    assert.ok(lateAapl,'initial AAPL request captured');
-    await lateAapl.fulfill({json:[bar('AAPL',300)]});
+    assert.equal(lateAapl,null,'placeholder default AAPL is never requested once the server lists available symbols');
     await page.waitForTimeout(100);
     assert.ok(await page.getByText('$5,000.00',{exact:true}).isVisible(),'late AAPL must not replace GOLD');
     assert.equal(await page.getByText('$300.00',{exact:true}).count(),0);
+  });
+  await scenario('overview delayed: no history request before symbols resolve, then selected symbol only', async page => {
+    const seen=[];
+    const bar=(symbol,close)=>({symbol,date:'2026-11-13',open:close,high:close+1,low:close-1,close,volume:100,source_provider:'fixture'});
+    await page.route('**/api/v1/**', async route => {
+      const path=new URL(route.request().url()).pathname;
+      if(path.includes('/stocks/'))seen.push(path);
+      if(path.endsWith('/auth/me'))return route.fulfill({json:{email:'fixture@example.invalid',full_name:'Fixture'}});
+      if(path.endsWith('/public/market-overview')){await new Promise(r=>setTimeout(r,700));return route.fulfill({json:{symbols:[{symbol:'GOLD',name:'Gold',currency:'USD'}]}});}
+      if(path.includes('/stocks/GOLD/history'))return route.fulfill({json:[bar('GOLD',5000)]});
+      if(path.includes('/indicators'))return route.fulfill({json:{}});
+      if(path.endsWith('/symbols'))return route.fulfill({json:[]});
+      if(path.endsWith('/predictions'))return route.fulfill({json:[]});
+      return route.fulfill({json:{}});
+    });
+    await page.goto(base);
+    await page.waitForTimeout(300);
+    assert.deepEqual(seen,[],'no market request while the overview is still pending');
+    await page.getByText('Latest close · GOLD').waitFor();
+    assert.ok(seen.every(p=>p.includes('/GOLD/')),'only GOLD was requested: '+seen.join(','));
+  });
+  await scenario('overview failure falls back to the placeholder symbol explicitly', async page => {
+    const bar=(symbol,close)=>({symbol,date:'2026-11-13',open:close,high:close+1,low:close-1,close,volume:100,source_provider:'fixture'});
+    await page.route('**/api/v1/**', async route => {
+      const path=new URL(route.request().url()).pathname;
+      if(path.endsWith('/auth/me'))return route.fulfill({json:{email:'fixture@example.invalid',full_name:'Fixture'}});
+      if(path.endsWith('/public/market-overview'))return route.fulfill({status:500,json:{error:{code:'X',message:'down'}}});
+      if(path.includes('/stocks/AAPL/history'))return route.fulfill({json:[bar('AAPL',300)]});
+      if(path.includes('/indicators'))return route.fulfill({json:{}});
+      if(path.endsWith('/symbols'))return route.fulfill({json:[]});
+      if(path.endsWith('/predictions'))return route.fulfill({json:[]});
+      return route.fulfill({json:{}});
+    });
+    await page.goto(base);
+    await page.getByText('Latest close · AAPL').waitFor();
+  });
+  await scenario('late response for a previously selected symbol cannot overwrite the new selection', async page => {
+    let lateGold=null;
+    const bar=(symbol,close)=>({symbol,date:'2026-11-13',open:close,high:close+1,low:close-1,close,volume:100,source_provider:'fixture'});
+    await page.route('**/api/v1/**', async route => {
+      const path=new URL(route.request().url()).pathname;
+      if(path.endsWith('/auth/me'))return route.fulfill({json:{email:'fixture@example.invalid',full_name:'Fixture'}});
+      if(path.endsWith('/public/market-overview'))return route.fulfill({json:{symbols:[{symbol:'GOLD',name:'Gold',currency:'USD'},{symbol:'SILVER',name:'Silver',currency:'USD'}]}});
+      if(path.includes('/stocks/GOLD/history')){lateGold=route;return;}
+      if(path.includes('/stocks/SILVER/history'))return route.fulfill({json:[bar('SILVER',300)]});
+      if(path.includes('/indicators'))return route.fulfill({json:{}});
+      if(path.endsWith('/symbols'))return route.fulfill({json:[]});
+      if(path.endsWith('/predictions'))return route.fulfill({json:[]});
+      return route.fulfill({json:{}});
+    });
+    await page.goto(base);
+    await page.locator('.pill',{hasText:/^SILVER$/}).click();
+    await page.getByText('Latest close · SILVER').waitFor();
+    await page.getByText('$300.00',{exact:true}).waitFor();
+    assert.ok(lateGold,'GOLD request was held');
+    await lateGold.fulfill({json:[bar('GOLD',5000)]});
+    await page.waitForTimeout(150);
+    assert.equal(await page.getByText('$5,000.00',{exact:true}).count(),0,'late GOLD response must not replace SILVER');
+    assert.ok(await page.getByText('$300.00',{exact:true}).isVisible());
+  });
+  const dash = async (page, overview, extra) => {
+    const bar=(symbol,close)=>({symbol,date:'2026-11-13',open:close,high:close+1,low:close-1,close,volume:100,source_provider:'fixture'});
+    await page.route('**/api/v1/**', async route => {
+      const path=new URL(route.request().url()).pathname;
+      if(extra&&await extra(route,path))return;
+      if(path.endsWith('/auth/me'))return route.fulfill({json:{email:'fixture@example.invalid',full_name:'Fixture'}});
+      if(path.endsWith('/public/market-overview'))return route.fulfill({json:overview});
+      if(path.includes('/history'))return route.fulfill({json:[bar('GOLD',5000)]});
+      if(path.includes('/indicators'))return route.fulfill({status:404,json:{error:{code:'NOT_FOUND',message:'need 60 bars'}}});
+      if(path.endsWith('/symbols'))return route.fulfill({json:[]});
+      if(path.endsWith('/predictions'))return route.fulfill({json:[]});
+      return route.fulfill({json:{}});
+    });
+    await page.goto(base);
+    await page.getByText('Latest close · GOLD').waitFor();
+  };
+  const sym=[{symbol:'GOLD',name:'Gold',currency:'USD'}];
+  for (const [name, ov, warn, mustHave] of [
+    ['sample-only (MOCKED overview)', {symbols:sym,data_source:'checked-in sample data (not live market data)',is_sample_data:true,has_sample_data:true,has_unrecognized_source:false}, /All stored data is sample data/, 'checked-in sample data'],
+    ['mixed sample+provider (MOCKED overview)', {symbols:sym,data_source:'checked-in sample data (not live market data); daily bars recorded as yfinance_nse (Yahoo Finance NSE path)',is_sample_data:false,has_sample_data:true,has_unrecognized_source:false}, /Some symbols use sample data/, 'yfinance_nse'],
+    ['unrecognized tag (MOCKED overview)', {symbols:sym,data_source:"unrecognized source tag 'x' (unverified)",is_sample_data:false,has_sample_data:false,has_unrecognized_source:true}, /unrecognized source tag/, 'unverified'],
+  ]) {
+    await scenario('source UI: '+name, async page => {
+      await dash(page, ov);
+      await page.getByTestId('source-warning').waitFor();
+      assert.match(await page.getByTestId('source-warning').innerText(), warn);
+      const body=await page.innerText('body');
+      assert.ok(body.includes(mustHave),'label shown');
+      assert.ok(!/Real market data/.test(body),'no unconditional "real" claim');
+      if(name.startsWith('sample-only'))assert.ok(!/Twelve Data|Yahoo/.test(body),'sample data is never labelled as a named provider');
+      if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/source-${name.split(' ')[0]}.png`});
+    });
+  }
+  await scenario('source UI: sample and unrecognized tags are both reported; caption lists window tags and all stored tags (MOCKED overview)', async page => {
+    await dash(page, {symbols:[{symbol:'GOLD',name:'Gold',currency:'USD',source_provider:'yfinance_nse',source_providers:['csv-sample','mystery-feed','yfinance_nse']}],data_source:"checked-in sample data (not live market data); unrecognized source tag 'mystery-feed' (unverified); daily bars recorded as yfinance_nse",is_sample_data:false,has_sample_data:true,has_unrecognized_source:true});
+    const w=await page.getByTestId('source-warning').innerText();
+    assert.match(w,/Some symbols use sample data/); assert.match(w,/unrecognized source tag/);
+    const cap=await page.getByTestId('chart-source').innerText();
+    assert.match(cap,/Source tags recorded on the bars shown: fixture/);
+    assert.match(cap,/all tags stored for GOLD: csv-sample, mystery-feed, yfinance_nse/);
+    assert.match(await page.getByTestId('prediction-source-caveat').innerText(),/Predictions and backtests that use it are not evidence about live markets/);
+    await page.locator('aside nav button',{hasText:/^Backtest$/}).click();
+    assert.match(await page.getByTestId('backtest-source-caveat').innerText(),/csv-sample, mystery-feed, yfinance_nse/);
+    if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/source-both-warnings.png`,fullPage:true});
+  });
+  await scenario('source UI: single recorded provider shows no warning and indicators are disabled with a message when unavailable', async page => {
+    await dash(page, {symbols:sym,data_source:'daily bars recorded as yfinance_nse (Yahoo Finance NSE path)',is_sample_data:false,has_sample_data:false,has_unrecognized_source:false});
+    assert.equal(await page.getByTestId('source-warning').count(),0);
+    await page.getByTestId('indicators-unavailable').waitFor();
+    assert.equal(await page.locator('.indicator-toggles button:not([disabled])').count(),0);
+    assert.equal(await page.locator('.indicator-toggles .chip.active').count(),0,'no indicator shown as active without data');
+  });
+  await scenario('scanner: typed SCANNER_DISABLED shows the off state; other 403 shows an error, not the off state', async page => {
+    await dash(page, {symbols:sym}, async (route,path)=>{ if(path.endsWith('/scanner/coverage')){await route.fulfill({status:403,json:{error:{code:'SCANNER_DISABLED',message:'The scanner is disabled on this server.'}}});return true;} });
+    await page.locator('aside nav button',{hasText:/^Scanner$/}).click();
+    await page.getByTestId('scanner-disabled').waitFor();
+    if(process.env.EVIDENCE_DIR)await page.screenshot({path:`${process.env.EVIDENCE_DIR}/scanner-disabled.png`});
+  });
+  await scenario('scanner: a different 403 (even with "disabled" in the text) is not shown as the off state', async page => {
+    await dash(page, {symbols:sym}, async (route,path)=>{ if(path.endsWith('/scanner/coverage')){await route.fulfill({status:403,json:{error:{code:'FORBIDDEN',message:'Account disabled.'}}});return true;} });
+    await page.locator('aside nav button',{hasText:/^Scanner$/}).click();
+    await page.getByText('Account disabled.').waitFor();
+    assert.equal(await page.getByTestId('scanner-disabled').count(),0);
   });
   await scenario('wrong-symbol history is shown as an error and cannot produce a prediction', async page => {
     let writes=0;
