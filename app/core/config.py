@@ -109,12 +109,20 @@ INSECURE_DATABASE_PASSWORDS = {
     "postgres",
     "admin",
 }
+PRODUCTION_ALIASES = {"prod", "prd", "live", "release", "prod-live", "production-live"}
 LOCAL_HOSTNAMES = {"localhost", "127.0.0.1", "::1", "postgres", "redis"}
 
 
 def validate_production_settings(config: Settings) -> None:
     """Fail closed when production configuration contains development defaults."""
-    if config.environment.strip().casefold() != "production":
+    env = config.environment.strip().casefold()
+    if env in PRODUCTION_ALIASES:
+        # A near-miss spelling used to skip every production check below. Refuse it instead.
+        raise RuntimeError(
+            f"ENVIRONMENT={config.environment!r} looks like production but is not exactly 'production'. "
+            "Use 'production' (checks enforced) or 'development'."
+        )
+    if env != "production":
         return
 
     secret = config.jwt_secret.strip()
