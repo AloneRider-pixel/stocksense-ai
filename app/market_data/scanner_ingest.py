@@ -15,6 +15,7 @@ import pandas as pd
 from sqlalchemy import select
 
 from app.db.database import get_session
+from app.market_data.base import MarketBar, drop_incomplete_bars
 from app.db.models import ScannerBar
 from app.services.scanner import BENCHMARK, fetch_universe, load_universe, universe_available
 
@@ -26,8 +27,17 @@ def _provider_symbol(symbol: str) -> str:
     return "^NSEI" if symbol == BENCHMARK else f"{symbol}.NS"
 
 
-def _store(session, symbol: str, frame: pd.DataFrame) -> int:
+def _store(session, symbol: str, frame: pd.DataFrame, now=None) -> int:
     frame = frame.dropna(subset=["Close", "High", "Low", "Volume"])
+    if frame.empty:
+        return 0
+    # Same defensive filter as the main ingestion path: a running session's bar is not stored as a close.
+    stamps = [
+        MarketBar(date=idx.date().isoformat(), symbol=symbol, open=0.0, high=0.0, low=0.0, close=0.0, volume=0)
+        for idx in frame.index
+    ]
+    keep = {b.date for b in drop_incomplete_bars(stamps, exchange="NSE", timezone_name="Asia/Kolkata", now=now)}
+    frame = frame[[idx.date().isoformat() in keep for idx in frame.index]]
     if frame.empty:
         return 0
     rows = {idx.date(): r for idx, r in frame.iterrows()}
