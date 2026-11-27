@@ -132,12 +132,12 @@ def test_live_seed_ingests_and_trains_per_symbol_model(
     finally:
         session.close()
 
-    model_file = tmp_path / "stocksense_rf_AAPL.joblib"
+    model_file = tmp_path / "stocksense_rf_AAPL.skops"
     assert model_file.exists()
 
     from app.services.predictor import Predictor
 
-    predictor = Predictor(model_path=tmp_path / "missing_global.joblib")
+    predictor = Predictor(model_path=tmp_path / "missing_global.skops")
     history = [
         {"date": f"2025-{(i // 28) + 1:02d}-{(i % 28) + 1:02d}", "close": 100.5 + i, "volume": 1_000_000}
         for i in range(100, 150)
