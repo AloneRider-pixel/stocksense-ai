@@ -18,9 +18,9 @@ class FinalBarsProvider:
 
     def history(self, symbol: str, limit: int = 100) -> list[MarketBar]:
         info = describe_symbol(symbol)
-        return drop_incomplete_bars(
-            self._inner.history(symbol, limit=limit), exchange=info.exchange, timezone_name=info.timezone
-        )
+        # Fetch a few extra bars: the newest ones may be dropped as not final, and the caller still wants `limit`.
+        bars = self._inner.history(symbol, limit=limit + 3)
+        return drop_incomplete_bars(bars, exchange=info.exchange, timezone_name=info.timezone)[-limit:]
 
 
 def get_market_data_provider() -> MarketDataProvider:
