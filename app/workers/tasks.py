@@ -10,6 +10,7 @@ from app.db.database import get_session
 from app.db.repository import MarketDataRepository, PredictionRepository
 from app.market_data.factory import get_market_data_provider
 from app.market_data.ingestion import MarketDataIngestionService
+from app.market_data.symbols import has_unsupported_exchange_suffix
 from app.services.post_ingest import run_post_ingest
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,10 @@ async def refresh_configured_markets(ctx) -> dict[str, int]:
     total_evaluated = 0
 
     for symbol in settings.market_data_symbol_list:
+        if has_unsupported_exchange_suffix(symbol):
+            # One unsupported ticker must not stop the symbols after it from refreshing.
+            logger.warning("skipping unsupported symbol in refresh: %s", symbol)
+            continue
         result = await refresh_market_data(ctx, symbol)
         total_fetched += int(result["fetched"])
         total_inserted += int(result["inserted"])
