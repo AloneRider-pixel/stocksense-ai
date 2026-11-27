@@ -31,9 +31,10 @@ export default function Scanner() {
   const [card, setCard] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [disabled, setDisabled] = useState(false);
 
   const loadCoverage = useCallback(async () => {
-    try { const cov = await api("/scanner/coverage"); setCoverage(cov); return cov; } catch (e) { setError(e.message); return null; }
+    try { const cov = await api("/scanner/coverage"); setCoverage(cov); return cov; } catch (e) { if (e.status === 403 && e.code === "SCANNER_DISABLED") setDisabled(true); else setError(e.message); return null; }
   }, []);
 
   const loadAll = useCallback(async () => {
@@ -75,6 +76,16 @@ export default function Scanner() {
   const set = (k) => (e) => setRule({ ...rule, [k]: e.target.value });
 
   const dataPending = coverage && !coverage.loading && coverage.symbols_with_data === 0;
+
+  if (disabled) {
+    return (
+      <section className="panel scanner" data-testid="scanner-disabled">
+        <p className="eyebrow">NIFTY 500 SCANNER</p>
+        <h2>Scanner is turned off</h2>
+        <p className="muted" role="status">The scanner is disabled on this server until the data provider's terms for this use are verified. Nothing is loaded, and no scanner data is shown. The rest of the app is not affected.</p>
+      </section>
+    );
+  }
 
   return (
     <section className="panel scanner">
