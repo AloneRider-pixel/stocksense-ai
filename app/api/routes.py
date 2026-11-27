@@ -512,7 +512,7 @@ def stock_history(
     session = get_session()
     try:
         repository = MarketDataRepository(session)
-        stored = repository.list_history(normalized, limit=limit)
+        stored = repository.list_history_excluding_open_session(normalized, limit=limit)
         last_ingested = stored[-1].ingested_at if stored else None
         if last_ingested is not None and last_ingested.tzinfo is None:
             # SQLite returns naive datetimes even for timezone-aware columns.
@@ -549,7 +549,7 @@ def stock_history(
                         ]
                     )
                     PredictionRepository(session).evaluate_pending(normalized)
-                    stored = repository.list_history(normalized, limit=limit)
+                    stored = repository.list_history_excluding_open_session(normalized, limit=limit)
             except (TwelveDataError, YFinanceError, ValueError) as exc:
                 if not stored:
                     raise HTTPException(
