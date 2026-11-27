@@ -28,7 +28,7 @@ The worker refreshes the configured symbol universe on the configured daily sche
 
 ## Training artifacts
 
-    models/stocksense_rf.joblib
+    models/stocksense_rf.skops
     models/metrics.json
     models/registry.json
     models/walk_forward_predictions.csv
