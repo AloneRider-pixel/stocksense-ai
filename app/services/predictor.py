@@ -28,7 +28,7 @@ def inference_model_label(model_version: str | None) -> str:
     return base[:33] + ":" + identity + suffix
 
 
-_SAFE_KEY = re.compile(r"^[A-Z0-9&^=-]{1,32}$")
+_SAFE_KEY = re.compile(r"^[A-Z0-9&^=.-]{1,32}$")
 logger = logging.getLogger(__name__)
 
 
