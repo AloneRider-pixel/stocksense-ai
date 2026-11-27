@@ -16,6 +16,7 @@ timezone).
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 
@@ -92,11 +93,13 @@ _INDEX_NAMES = {
     "NIFTY50": ("NIFTY 50 Index", "^NSEI"),
 }
 
-# Precious metals (spot, USD, delayed/indicative via Yahoo Finance; these are
-# NOT MCX futures and not exchange-traded Indian securities).
+# Precious metals, USD, delayed and indicative. The instrument depends on which source
+# answers: Twelve Data returns the spot pair (XAU/USD, XAG/USD); the Yahoo fallback returns
+# COMEX front-month futures (GC=F, SI=F), a different instrument. The stored tag does not
+# record which one answered. Neither is an MCX contract or an exchange-traded Indian security.
 _METAL_NAMES = {
-    "GOLD": ("Gold (spot, USD)", "XAUUSD=X"),
-    "SILVER": ("Silver (spot, USD)", "XAGUSD=X"),
+    "GOLD": ("Gold (USD, indicative: spot or COMEX futures)", "XAUUSD=X"),
+    "SILVER": ("Silver (USD, indicative: spot or COMEX futures)", "XAGUSD=X"),
 }
 
 # Currency pairs vs INR (indicative interbank rates via Yahoo Finance;
@@ -165,7 +168,7 @@ def _metal(symbol: str) -> SymbolInfo:
     return SymbolInfo(
         symbol=symbol,
         name=name,
-        exchange="Spot (indicative)",
+        exchange="Indicative (source varies)",
         currency="USD",
         provider="metals_fx",
         provider_symbol=provider_symbol,
@@ -188,9 +191,41 @@ def _currency(symbol: str) -> SymbolInfo:
     )
 
 
+def normalize_symbol(symbol: str | None) -> str:
+    """Canonical display symbol for API input.
+
+    Strips, upper-cases, and drops a ".NS" suffix only when the bare symbol is
+    a registered NSE equity (so "reliance.ns" -> "RELIANCE"). Unregistered
+    input is returned unchanged (upper-cased) and is never guessed into
+    another market.
+    """
+    value = (symbol or "").strip().upper()
+    if value.endswith(".NS") and value[:-3] in _NIFTY50_NAMES:
+        return value[:-3]
+    return value
+
+
+_EXCHANGE_SUFFIX = re.compile(r"^[A-Z0-9&^=-]+\.[A-Z]{1,4}$")
+_US_SHARE_CLASSES = {"BRK.A", "BRK.B", "BF.A", "BF.B"}
+
+
+class UnsupportedSymbolError(ValueError):
+    """An exchange-suffixed symbol that the registry does not cover (e.g. ".BO", ".L", ".TO")."""
+
+
+def has_unsupported_exchange_suffix(symbol: str | None) -> bool:
+    """True for unregistered symbols written with an exchange suffix.
+
+    Known US share-class tickers (BRK.B, BF.B, ...) are not treated as exchange
+    suffixes; any other dotted suffix is, including one-letter ones such as ".L". Registered symbols are never unsupported.
+    """
+    value = normalize_symbol(symbol)
+    return bool(value) and lookup_symbol(value) is None and value not in _US_SHARE_CLASSES and bool(_EXCHANGE_SUFFIX.match(value))
+
+
 def lookup_symbol(symbol: str) -> SymbolInfo | None:
     """Resolve a display symbol to its registry entry, or None if unknown."""
-    normalized = symbol.strip().upper()
+    normalized = normalize_symbol(symbol)
     if normalized in _INDEX_NAMES:
         return _index(normalized)
     if normalized in _METAL_NAMES:
@@ -214,7 +249,13 @@ def currency_symbols() -> list[str]:
 
 def describe_symbol(symbol: str) -> SymbolInfo:
     """Resolve a display symbol; unknowns fall back to the US/Twelve Data path."""
-    return lookup_symbol(symbol) or _us(symbol.strip().upper())
+    found = lookup_symbol(symbol)
+    if found is not None:
+        return found
+    if has_unsupported_exchange_suffix(symbol):
+        # Previously fell through to the US/Twelve Data path and returned the wrong market.
+        raise UnsupportedSymbolError(f"Exchange suffix on {symbol.strip().upper()!r} is not supported.")
+    return _us(symbol.strip().upper())
 
 
 def nifty50_symbols() -> list[str]:
