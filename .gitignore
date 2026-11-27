@@ -5,6 +5,7 @@ __pycache__/
 .env
 .DS_Store
 models/*.joblib
+models/*.skops
 frontend/node_modules/
 frontend/dist/
 
