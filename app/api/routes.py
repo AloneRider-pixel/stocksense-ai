@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.public_rate_limit import enforce_public_rate_limit
@@ -17,10 +18,12 @@ from app.api.schemas import (
 )
 from app.auth.dependencies import get_current_user
 from app.core.config import settings
+from app.db.repository import lookup_symbol_supported
+from app.db.models import MarketBarRecord
 from app.db.database import get_session
-from app.db.repository import MarketDataRepository, PredictionRepository, WatchlistRepository
+from app.db.repository import MarketDataRepository, finality_metadata, PredictionRepository, WatchlistRepository
 from app.market_data.factory import get_provider_for_symbol
-from app.market_data.symbols import describe_symbol
+from app.market_data.symbols import describe_symbol, has_unsupported_exchange_suffix, normalize_symbol
 from app.market_data.yfinance_provider import YFinanceError
 from app.services.indicators import compute_indicators
 from app.services.screener import screen_universe
@@ -28,11 +31,55 @@ from app.market_data.ingestion import MarketDataIngestionService
 from app.services.post_ingest import run_post_ingest
 from app.market_data.twelve_data import TwelveDataError
 from app.services.cache import PredictionCache
-from app.services.predictor import Predictor
+from app.services.predictor import ModelIncompatibleError, Predictor
+
+def _supported_symbol(symbol: str | None) -> str:
+    """Normalize an API symbol and refuse exchange-suffixed symbols the registry does not cover."""
+    value = normalize_symbol(symbol)
+    if has_unsupported_exchange_suffix(value):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "UNSUPPORTED_SYMBOL",
+                "message": f"{value} is not supported. Use a registered symbol without an exchange suffix.",
+            },
+        )
+    return value
+
 
 router = APIRouter()
 predictor = Predictor()
 cache = PredictionCache()
+
+
+_SAMPLE_TAGS = {"csv-sample", "csv", "CSVMarketDataProvider"}
+_PROVIDER_LABELS = {
+    "csv-sample": "checked-in sample data (not live market data)",
+    "csv": "checked-in sample data (not live market data)",
+    "CSVMarketDataProvider": "local CSV file data (not live market data)",
+    "yfinance_nse": "daily bars recorded as yfinance_nse (Yahoo Finance NSE path)",
+    "twelve_data": "daily bars recorded as twelve_data (Twelve Data path)",
+    "metals_fx": "metals/FX daily bars recorded as metals_fx (the stored tag does not say which upstream answered)",
+}
+
+
+def _all_tags(snapshots: list[dict]) -> list[str]:
+    return sorted(
+        {t for row in snapshots for t in (row.get("source_providers") or [row["source_provider"]])}
+    )
+
+
+def _describe_sources(snapshots: list[dict]) -> str:
+    """Label the data from the providers that actually produced the stored bars."""
+    providers = _all_tags(snapshots)
+    if not providers:
+        return "no market data loaded"
+    # A tag is only a label stored with the bar. Unrecognized tags are shown as
+    # unverified, never promoted to a known provider.
+    return "; ".join(
+        _PROVIDER_LABELS.get(p) or f"unrecognized source tag '{p}' (unverified)"
+        for p in providers
+    )
 
 
 @router.get("/health")
@@ -73,6 +120,8 @@ def public_market_overview() -> dict[str, object]:
         repository = MarketDataRepository(session)
         provider = None
         for symbol in settings.all_symbol_list:
+            if has_unsupported_exchange_suffix(symbol):
+                continue  # a misconfigured symbol must not stop the other snapshots
             stored = _latest_bars(repository, symbol)
             last_ingested = stored[-1].ingested_at if stored else None
             if last_ingested is not None and last_ingested.tzinfo is None:
@@ -135,14 +184,31 @@ def public_market_overview() -> dict[str, object]:
                     "date": latest.date.isoformat(),
                     "close": float(latest.close),
                     "change_pct": change_pct,
+                    "source_provider": latest.source_provider,
                 }
             )
+        # One grouped query for every tag stored per symbol (not one per symbol), so older
+        # bars from another source are not hidden by the latest bar.
+        if snapshots:
+            tags: dict[str, set[str]] = {}
+            for sym, tag in session.execute(
+                select(MarketBarRecord.symbol, MarketBarRecord.source_provider)
+                .where(MarketBarRecord.symbol.in_([row["symbol"] for row in snapshots]))
+                .distinct()
+            ).all():
+                tags.setdefault(sym, set()).add(tag)
+            for row in snapshots:
+                row["source_providers"] = sorted(tags.get(row["symbol"], {row["source_provider"]}))
     finally:
         session.close()
 
     payload = {
         "symbols": snapshots,
-        "data_source": "Twelve Data (US) and Yahoo Finance (NSE) daily bars",
+        "data_source": _describe_sources(snapshots),
+        "source_providers": _all_tags(snapshots),
+        "is_sample_data": bool(snapshots) and set(_all_tags(snapshots)) <= _SAMPLE_TAGS,
+        "has_sample_data": bool(set(_all_tags(snapshots)) & _SAMPLE_TAGS),
+        "has_unrecognized_source": any(t not in _PROVIDER_LABELS for t in _all_tags(snapshots)),
         "refreshed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "disclaimer": (
 "Research and engineering project. Not investment advice. Not a "
@@ -178,7 +244,7 @@ def public_accuracy(
     persistence baseline so the model has to beat "tomorrow = today" to show
     value. Sample sizes are part of the payload on purpose.
     """
-    key = (symbol or "").strip().upper() or None
+    key = normalize_symbol(symbol) or None
     now = time.time()
     cached = _accuracy_cache.get("payload")
     if (
@@ -325,11 +391,12 @@ def backtest_symbol(
     """
     from app.services.backtest import run_backtest
 
-    normalized = symbol.strip().upper()
+    normalized = _supported_symbol(symbol)
     session = get_session()
     try:
         repository = MarketDataRepository(session)
-        stored = repository.list_history(normalized, limit=limit)
+        stored = repository.list_history_excluding_open_session(normalized, limit=limit)
+        finality = finality_metadata(stored)
     finally:
         session.close()
 
@@ -369,6 +436,7 @@ def backtest_symbol(
         "symbol": normalized,
         "metrics": result.metrics,
         "equity_curve": result.equity_curve,
+        "data_finality": finality,
         "assumptions": (
             "Walk-forward out-of-sample predictions; long when the model "
             "predicts an up move, flat otherwise. No transaction costs, no "
@@ -384,7 +452,7 @@ def backtest_symbol(
 
 
 def _ingest_symbol(symbol: str, limit: int) -> dict[str, int | str]:
-    symbol = symbol.strip().upper()
+    symbol = _supported_symbol(symbol)
     session = get_session()
     try:
         repository = MarketDataRepository(session)
@@ -431,7 +499,7 @@ def stock_history(
     symbol: str,
     limit: int = Query(default=100, ge=1, le=5000),
 ) -> list[dict[str, object]]:
-    normalized = symbol.strip().upper()
+    normalized = _supported_symbol(symbol)
     if not normalized:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -547,7 +615,7 @@ def predict(
     request: PredictionRequest,
     current_user=Depends(get_current_user),
 ) -> PredictionResponse:
-    symbol = request.symbol.upper()
+    symbol = _supported_symbol(request.symbol)
     history = [bar.model_dump() for bar in request.history]
     prediction_date = history[-1]["date"]
     cache_key = predictor.cache_key(symbol, history)
@@ -560,6 +628,11 @@ def predict(
 
     try:
         result = predictor.predict(symbol=symbol, history=history)
+    except ModelIncompatibleError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "MODEL_INCOMPATIBLE", "message": "The saved prediction model does not match this version of the service. Predictions are unavailable until it is retrained."},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -617,6 +690,7 @@ def prediction_history(
         for record in records:
             item = PredictionHistoryItem.model_validate(record)
             item.baseline_close = baseline.get((record.symbol, record.prediction_date))
+            item.unevaluable = record.actual_date is None and lookup_symbol_supported(record.symbol) is False
             items.append(item)
         return items
     except SQLAlchemyError as exc:
@@ -638,7 +712,7 @@ def prediction_history(
 def prediction_evaluation(
     symbol: str | None = Query(default=None, max_length=32),
     current_user=Depends(get_current_user),
-) -> dict[str, float | int | None]:
+) -> dict[str, object]:
     session = get_session()
     try:
         repository = PredictionRepository(session)
@@ -671,11 +745,12 @@ def stock_indicators(
     Values are derived only from past and current bars (no lookahead). Leading
     entries are null until each indicator has enough history.
     """
-    normalized = symbol.strip().upper()
+    normalized = _supported_symbol(symbol)
     session = get_session()
     try:
         repository = MarketDataRepository(session)
-        stored = repository.list_history(normalized, limit=limit)
+        stored = repository.list_history_excluding_open_session(normalized, limit=limit)
+        finality = finality_metadata(stored)
         if len(stored) < 60:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -704,6 +779,7 @@ def stock_indicators(
     info = describe_symbol(normalized)
     payload = compute_indicators(bars)
     payload["symbol"] = normalized
+    payload["data_finality"] = finality
     payload["exchange"] = info.exchange
     payload["currency"] = info.currency
     return payload
@@ -724,7 +800,7 @@ def list_symbols() -> list[dict[str, str]]:
             "timezone": info.timezone,
             "asset_class": info.asset_class,
         }
-        for info in (describe_symbol(s) for s in settings.all_symbol_list)
+        for info in (describe_symbol(s) for s in settings.all_symbol_list if not has_unsupported_exchange_suffix(s))
     ]
 
 
@@ -750,7 +826,7 @@ def add_to_watchlist(
     payload: dict[str, str],
     current_user=Depends(get_current_user),
 ) -> dict[str, object]:
-    symbol = str(payload.get("symbol", "")).strip().upper()
+    symbol = _supported_symbol(str(payload.get("symbol", "")))
     if not symbol:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -786,7 +862,7 @@ def remove_from_watchlist(
 ) -> dict[str, object]:
     session = get_session()
     try:
-        removed = WatchlistRepository(session).remove(current_user.id, symbol.strip().upper())
+        removed = WatchlistRepository(session).remove(current_user.id, normalize_symbol(symbol))
         symbols = WatchlistRepository(session).list_symbols(current_user.id)
     finally:
         session.close()
@@ -795,7 +871,7 @@ def remove_from_watchlist(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
                 "code": "WATCHLIST_ITEM_NOT_FOUND",
-                "message": f"'{symbol.strip().upper()}' is not on the watchlist.",
+                "message": f"'{normalize_symbol(symbol)}' is not on the watchlist.",
             },
         )
     return {"removed": True, "symbols": symbols}
@@ -839,7 +915,7 @@ def screener(
                     "close": row.close,
                     "volume": row.volume,
                 }
-                for row in repository.list_history(symbol, limit=120)
+                for row in repository.list_history_excluding_open_session(symbol, limit=120)
             ]
             for symbol in settings.all_symbol_list
         }
