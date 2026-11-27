@@ -53,6 +53,9 @@ export default function Dashboard({ user, onSignOut }) {
   const [marketError, setMarketError] = useState("");
   const [marketLoading, setMarketLoading] = useState(true);
   const [marketAttempt, setMarketAttempt] = useState(0);
+  // Wait for the server's available symbols before the first history/indicator fetch,
+  // so the placeholder default is never requested when it has no stored data.
+  const [symbolsReady, setSymbolsReady] = useState(false);
   const [prediction, setPrediction] = useState(null);
   const [history, setHistory] = useState([]);
   const [evaluation, setEvaluation] = useState(null);
@@ -69,6 +72,7 @@ export default function Dashboard({ user, onSignOut }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [dataSource, setDataSource] = useState("");
+  const [sourceFlags, setSourceFlags] = useState({ sample: false, mixed: false, unknown: false });
   const [symbolQuery, setSymbolQuery] = useState("");
   const [publicAccuracy, setPublicAccuracy] = useState(null);
   const [backtest, setBacktest] = useState(null);
@@ -84,6 +88,7 @@ export default function Dashboard({ user, onSignOut }) {
           setSymbols(list);
           setSymbol((cur) => (list.includes(cur) ? cur : list[0]));
           setDataSource(ov.data_source || "");
+          setSourceFlags({ sample: !!ov.is_sample_data, mixed: !!ov.has_sample_data && !ov.is_sample_data, unknown: !!ov.has_unrecognized_source });
           setSymbolMeta((prev) => {
             const next = { ...prev };
             ov.symbols.forEach((s) => { next[s.symbol] = { ...next[s.symbol], ...s }; });
@@ -91,7 +96,8 @@ export default function Dashboard({ user, onSignOut }) {
           });
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setSymbolsReady(true));
     api("/symbols")
       .then((list) => {
         if (Array.isArray(list)) {
@@ -106,6 +112,7 @@ export default function Dashboard({ user, onSignOut }) {
   }, []);
 
   useEffect(() => {
+    if (!symbolsReady) return undefined;
     let current = true;
     setBars([]);
     setIndicators(null);
@@ -132,7 +139,7 @@ export default function Dashboard({ user, onSignOut }) {
       .then((result) => { if (current) setIndicators(result); })
       .catch(() => { if (current) setIndicators(null); });
     return () => { current = false; };
-  }, [symbol, marketAttempt]);
+  }, [symbol, marketAttempt, symbolsReady]);
 
   useEffect(() => {
     api("/watchlist").then((w) => setWatchlist(w.symbols || [])).catch(() => {});
@@ -231,6 +238,18 @@ export default function Dashboard({ user, onSignOut }) {
 
   const firstName = user.full_name || user.email.split("@")[0];
   const currency = symbolMeta[symbol]?.currency || "USD";
+  // Recorded source tags only; this is a caveat, not a verification of any provider.
+  const sourceCaveat = (sym) => {
+    const tags = symbolMeta[sym]?.source_providers || [];
+    const sample = tags.some((t) => t === "csv-sample" || t === "csv" || t === "CSVMarketDataProvider");
+    const unknown = tags.some((t) => !["csv-sample", "csv", "CSVMarketDataProvider", "yfinance_nse", "twelve_data", "metals_fx"].includes(t));
+    const mixed = tags.length > 1;
+    if (!sample && !unknown && !mixed) return "";
+    return `Source caveat for ${sym}: its stored history carries ${mixed ? "more than one source tag" : "a sample or unrecognized tag"} (${tags.join(", ")})${sample ? ", including sample data" : ""}${unknown ? ", including an unrecognized tag (unverified)" : ""}. Predictions and backtests that use it are not evidence about live markets.`;
+  };
+  // As-of/source describe the row actually shown (the newest stored bar), not a separate filtered series.
+  const finalityNote = (date, provider) =>
+    `Latest stored bar: ${date || "unknown date"}, recorded source ${provider || "unknown"}. Not confirmed final: a bar stored before its session closed may never have been refreshed. Predictions, accuracy figures and backtests are scored against stored bars like this one, so they are simulated research output and not a check that any price is final.`;
   const exchangeOf = (s) => symbolMeta[s]?.exchange || "US";
   const exchangeSymbols = exchange === "ALL" ? symbols : symbols.filter((s) => exchangeOf(s) === exchange);
   const q = symbolQuery.trim().toLowerCase();
@@ -244,15 +263,15 @@ export default function Dashboard({ user, onSignOut }) {
       <aside>
         <Brand />
         <nav>
-          <a aria-current={tab === "overview" ? "page" : undefined} className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>Overview</a>
-          <a aria-current={tab === "watchlist" ? "page" : undefined} className={tab === "watchlist" ? "active" : ""} onClick={() => setTab("watchlist")}>Watchlist</a>
-          <a aria-current={tab === "scanner" ? "page" : undefined} className={tab === "scanner" ? "active" : ""} onClick={() => setTab("scanner")}>Scanner</a>
-          <a aria-current={tab === "screener" ? "page" : undefined} className={tab === "screener" ? "active" : ""} onClick={() => setTab("screener")}>Screener</a>
-          <a aria-current={tab === "activity" ? "page" : undefined} className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>Prediction activity</a>
-          <a aria-current={tab === "evaluation" ? "page" : undefined} className={tab === "evaluation" ? "active" : ""} onClick={() => setTab("evaluation")}>Model evaluation</a>
-          <a aria-current={tab === "backtest" ? "page" : undefined} className={tab === "backtest" ? "active" : ""} onClick={() => setTab("backtest")}>Backtest</a>
-          <a aria-current={tab === "wallet" ? "page" : undefined} className={tab === "wallet" ? "active" : ""} onClick={() => setTab("wallet")}>Paper wallet</a>
-          <a aria-current={tab === "alerts" ? "page" : undefined} className={tab === "alerts" ? "active" : ""} onClick={() => setTab("alerts")}>Alerts</a>
+          <button type="button" aria-current={tab === "overview" ? "page" : undefined} className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}>Overview</button>
+          <button type="button" aria-current={tab === "watchlist" ? "page" : undefined} className={tab === "watchlist" ? "active" : ""} onClick={() => setTab("watchlist")}>Watchlist</button>
+          <button type="button" aria-current={tab === "scanner" ? "page" : undefined} className={tab === "scanner" ? "active" : ""} onClick={() => setTab("scanner")}>Scanner</button>
+          <button type="button" aria-current={tab === "screener" ? "page" : undefined} className={tab === "screener" ? "active" : ""} onClick={() => setTab("screener")}>Screener</button>
+          <button type="button" aria-current={tab === "activity" ? "page" : undefined} className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>Prediction activity</button>
+          <button type="button" aria-current={tab === "evaluation" ? "page" : undefined} className={tab === "evaluation" ? "active" : ""} onClick={() => setTab("evaluation")}>Model evaluation</button>
+          <button type="button" aria-current={tab === "backtest" ? "page" : undefined} className={tab === "backtest" ? "active" : ""} onClick={() => setTab("backtest")}>Backtest</button>
+          <button type="button" aria-current={tab === "wallet" ? "page" : undefined} className={tab === "wallet" ? "active" : ""} onClick={() => setTab("wallet")}>Paper wallet</button>
+          <button type="button" aria-current={tab === "alerts" ? "page" : undefined} className={tab === "alerts" ? "active" : ""} onClick={() => setTab("alerts")}>Alerts</button>
           <button type="button" aria-current={tab === "datahealth" ? "page" : undefined} className={tab === "datahealth" ? "active" : ""} onClick={() => setTab("datahealth")}>Data health</button>
         </nav>
         {dataSource && <p className="aside-note">Market data: {dataSource}. May be delayed.</p>}
@@ -264,7 +283,14 @@ export default function Dashboard({ user, onSignOut }) {
           <div>
             <p className="eyebrow">{(TAB_TITLES[tab] || "Overview").toUpperCase()}</p>
             <h1>{tab === "datahealth" ? "Data evidence" : `Good evening, ${firstName}`}</h1>
-            <p className="muted">{tab === "datahealth" ? "Stored coverage, missing checks and source-use limits." : "Real market data, model signals, and a scored prediction record."}</p>
+            <p className="muted">{tab === "datahealth" ? "Stored coverage, missing checks and source-use limits." : (dataSource ? "Market data: " + dataSource + ". " : "") + "Model signals and a scored prediction record."}</p>
+            {(sourceFlags.sample || sourceFlags.mixed || sourceFlags.unknown) && (
+              <div className="error" role="status" data-testid="source-warning">
+                {sourceFlags.sample && <p>All stored data is sample data, not live market data.</p>}
+                {sourceFlags.mixed && <p>Some symbols use sample data, not live market data. Open a symbol to see the tags stored for it.</p>}
+                {sourceFlags.unknown && <p>At least one symbol has an unrecognized source tag. Treat its data as unverified.</p>}
+              </div>
+            )}
           </div>
           <div className="header-side">
             <NotificationBell />
@@ -282,6 +308,7 @@ export default function Dashboard({ user, onSignOut }) {
               <article><span>Directional accuracy</span><strong>{evaluation?.directional_accuracy_pct != null ? evaluation.directional_accuracy_pct.toFixed(1) + "%" : "—"}</strong><small>{evaluation?.evaluated_predictions ?? 0} scored records; pooled versions</small></article>
               <article><span>Online MAPE</span><strong>{evaluation?.mape_pct != null ? Number(evaluation.mape_pct).toFixed(2) + "%" : "—"}</strong><small>Percentage error; pooled scored versions</small></article>
             </section>
+            {market && <p className="muted small-print" role="note" data-testid="latest-bar-caveat">{finalityNote(market.date, market.source_provider)}</p>}
 
             <section className="panel chart-panel">
               <div className="panel-head">
@@ -317,14 +344,17 @@ export default function Dashboard({ user, onSignOut }) {
                 {INDICATOR_TOGGLES.map(([key, label]) => (
                   <button
                     key={key}
-                    className={"chip" + (overlays[key] ? " active" : "")}
+                    className={"chip" + (indicators && overlays[key] ? " active" : "")}
+                    disabled={!indicators}
+                    aria-pressed={!!(indicators && overlays[key])}
                     onClick={() => setOverlays((o) => ({ ...o, [key]: !o[key] }))}
                   >{label}</button>
                 ))}
               </div>
+              {!marketLoading && !indicators && bars.length > 0 && <p className="muted small-print" data-testid="indicators-unavailable">Indicators are unavailable for this symbol (not enough stored bars).</p>}
               {marketError && <div className="error" role="alert">{marketError} <button className="ghost" onClick={() => setMarketAttempt((n) => n + 1)}>Retry market data</button></div>}
               <PriceChart bars={bars} indicators={indicators} overlays={overlays} currency={currency} />
-              <p className="chart-note">Source: {bars[0]?.source_provider === "csv-sample" ? "checked-in sample data" : (bars[0]?.source_provider === "yfinance_nse" ? "Yahoo Finance (NSE)" : bars[0]?.source_provider === "twelve_data" ? "Twelve Data" : bars[0]?.source_provider === "metals_fx" ? "Metals/FX provider (Twelve Data with Yahoo fallback)" : bars[0]?.source_provider || "no loaded source data")} · daily bars · may be delayed · not investment advice</p>
+              <p className="chart-note" data-testid="chart-source">Source tags recorded on the bars shown: {[...new Set(bars.map((x) => x.source_provider))].map((t) => (t === "csv-sample" || t === "csv" || t === "CSVMarketDataProvider" ? "sample/CSV data (not live market data)" : t || "none")).join(", ") || "none loaded"}{(symbolMeta[symbol]?.source_providers || []).length > 1 ? ` · all tags stored for ${symbol}: ${symbolMeta[symbol].source_providers.join(", ")}` : ""} · daily bars · may be delayed · not investment advice</p>
             </section>
 
             <section className="workspace">
@@ -344,6 +374,7 @@ export default function Dashboard({ user, onSignOut }) {
                     </strong>
                   </div>
                 </div>
+                {sourceCaveat(symbol) && <p className="error" role="status" data-testid="prediction-source-caveat">{sourceCaveat(symbol)}</p>}
                 <button className="btn-primary" onClick={runPrediction} disabled={busy}>
                   {busy ? "Running model..." : "Run prediction"}
                 </button>
@@ -457,9 +488,9 @@ export default function Dashboard({ user, onSignOut }) {
                 <div className="row" key={item.id}>
                   <span>{item.symbol} · {item.prediction_date}<small style={{display:"block",overflowWrap:"anywhere"}}>{item.model || "unversioned historical record"}</small></span>
                   <span>{fmtPrice(symbolMeta[item.symbol]?.currency, item.predicted_close)}</span>
-                  <span>{item.actual_close ? fmtPrice(symbolMeta[item.symbol]?.currency, item.actual_close) : "Pending"}</span>
+                  <span>{item.actual_close ? fmtPrice(symbolMeta[item.symbol]?.currency, item.actual_close) : (item.unevaluable ? "Pending, cannot be scored here" : "Pending")}</span>
                   <span className={item.actual_close ? (item.percentage_error <= 2 ? "positive" : "negative") : ""}>
-                    {item.actual_close ? "Error " + item.percentage_error.toFixed(2) + "%" : "Awaiting actual close"}
+                    {item.actual_close ? "Error " + item.percentage_error.toFixed(2) + "%" : (item.unevaluable ? "Not scored: unsupported symbol" : "Awaiting actual close")}
                   </span>
                 </div>
               ))}
@@ -471,6 +502,9 @@ export default function Dashboard({ user, onSignOut }) {
           <>
             <section className="metric-grid">
               <article><span>Evaluated predictions</span><strong>{evaluation?.evaluated_predictions ?? 0}</strong><small>With realized actuals</small></article>
+              {(evaluation?.pending_unevaluable ?? 0) > 0 && (
+                <article data-testid="unevaluable-note"><span>Not scoreable here</span><strong>{evaluation.pending_unevaluable}</strong><small>Pending forecasts for symbols this app does not support for scoring ({(evaluation.pending_unevaluable_symbols || []).join(", ")}). They stay pending and are not in any metric.</small></article>
+              )}
               <article><span>Directional accuracy</span><strong>{evaluation?.directional_accuracy_pct != null ? evaluation.directional_accuracy_pct.toFixed(1) + "%" : "—"}</strong><small>Online, your record</small></article>
               <article><span>Online MAPE</span><strong>{evaluation?.mape_pct != null ? Number(evaluation.mape_pct).toFixed(2) + "%" : "—"}</strong><small>Percentage error, not price units</small></article>
               <article><span>Absolute price error</span><strong>Per symbol only</strong><small>Account-wide MAE is not compared across price units</small></article>
@@ -540,6 +574,7 @@ export default function Dashboard({ user, onSignOut }) {
           <section className="panel">
             <p className="eyebrow">BACKTEST</p>
             <h2>Model strategy vs buy-and-hold.</h2>
+            {sourceCaveat(backtestSymbol || symbol) && <p className="error" role="status" data-testid="backtest-source-caveat">{sourceCaveat(backtestSymbol || symbol)}</p>}
             <p className="muted">
               Walk-forward out-of-sample predictions decide a long-or-flat position for the
               next bar. No transaction costs, no shorting, no leverage. Pick a symbol to run
@@ -553,6 +588,7 @@ export default function Dashboard({ user, onSignOut }) {
               ))}
             </div>
             {backtestBusy && <p className="muted">Running walk-forward backtest…</p>}
+            {backtest?.data_finality?.latest_bar_date && <p className="muted small-print" role="note" data-testid="backtest-finality-caveat">{`Backtest bars end ${backtest.data_finality.latest_bar_date}, recorded source ${backtest.data_finality.source_provider || "unknown"}. A session that is open right now is left out. Older stored bars are not confirmed final: one saved before its close may never have been refreshed. Simulated result, not a check that any price is final.`}</p>}
             {backtestError && <div className="error">{backtestError}</div>}
             {backtest && (
               <>
