@@ -25,13 +25,15 @@ LogNotifier (log-only, no email) until external delivery is approved."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import timedelta, date
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import AlertRule, MarketBarRecord, Notification
+from zoneinfo import ZoneInfo
+
 from app.services.bar_eligibility import max_eligible_bar_date
 from app.services.notifications import Notifier, get_notifier
 
@@ -39,18 +41,30 @@ ALERT_KIND = "price_alert"
 
 
 def _recent_closes(session: Session, symbol: str, limit: int = 2, now=None) -> list[tuple]:
-    # Only bars eligible as completed closes: never future-dated, never
-    # a not-yet-settled same-day bar.
+    """Newest bars an alert may treat as closes: not future-dated and not a session still open for THIS symbol.
+
+    Exchange-aware (NSE 16:00 IST, US 17:00 ET, rolling hold for metals/FX/unknown venues), the same rule the
+    ingestion filter uses. It excludes only a bar that is open now; an older stored bar that was captured
+    before its close and never refreshed still passes (finality unknown).
+    """
+    from app.market_data.base import MarketBar, drop_incomplete_bars
+    from app.market_data.symbols import UnsupportedSymbolError, describe_symbol
+
+    try:
+        info = describe_symbol(symbol)
+    except UnsupportedSymbolError:
+        return []
     stmt = (
         select(MarketBarRecord.date, MarketBarRecord.close)
-        .where(
-            MarketBarRecord.symbol == symbol,
-            MarketBarRecord.date <= max_eligible_bar_date(now),
-        )
+        .where(MarketBarRecord.symbol == symbol, MarketBarRecord.date <= max_eligible_bar_date(now) + timedelta(days=1))
         .order_by(MarketBarRecord.date.desc())
-        .limit(limit)
+        .limit(limit + 3)
     )
-    return list(session.execute(stmt).all())
+    rows = list(session.execute(stmt).all())
+    stamps = [MarketBar(date=d.isoformat(), symbol=symbol, open=0.0, high=0.0, low=0.0, close=0.0, volume=0) for d, _ in rows]
+    clock = now if now is None or getattr(now, "tzinfo", None) else now.replace(tzinfo=ZoneInfo("Asia/Kolkata"))
+    keep = {b.date for b in drop_incomplete_bars(stamps, exchange=info.exchange, timezone_name=info.timezone, now=clock)}
+    return [r for r in rows if r[0].isoformat() in keep][:limit]
 
 
 class AlertService:
