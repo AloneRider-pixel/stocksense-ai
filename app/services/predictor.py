@@ -4,18 +4,17 @@ import json
 import os
 import logging
 import re
-import warnings
 from hashlib import sha256
 from pathlib import Path
 
-import joblib
 import pandas as pd
 
 from app.core.config import settings
 from app.services.features import FEATURE_COLUMNS, build_prediction_features
+from app.services.model_io import ModelIncompatibleError, load_model
 
 
-MODEL_PATH = Path("models/stocksense_rf.joblib")
+MODEL_PATH = Path("models/stocksense_rf.skops")
 REGISTRY_PATH = Path("models/registry.json")
 
 
@@ -31,10 +30,6 @@ def inference_model_label(model_version: str | None) -> str:
 
 _SAFE_KEY = re.compile(r"^[A-Z0-9&^=-]{1,32}$")
 logger = logging.getLogger(__name__)
-
-
-class ModelIncompatibleError(RuntimeError):
-    """A saved model artifact does not match the feature schema the code builds."""
 
 
 def check_model_compatible(model: object, source: str, registry_features: list[str] | None = None) -> None:
@@ -81,7 +76,7 @@ class Predictor:
     def _model_for(self, symbol: str) -> tuple[object, str]:
         """Resolve the model for a symbol.
 
-        Per-symbol live-trained artifacts (stocksense_rf_<SYMBOL>.joblib, written
+        Per-symbol live-trained artifacts (stocksense_rf_<SYMBOL>.skops, written
         by the demo seeder from ingested provider data) win over the global
         sample model so predictions stay in the symbol's price range.
         """
@@ -95,7 +90,7 @@ class Predictor:
         if key:
             candidates.append(
                 (
-                    self.model_path.with_name(f"stocksense_rf_{key}.joblib"),
+                    self.model_path.with_name(f"stocksense_rf_{key}.skops"),
                     f"random-forest-live-{key.lower()}",
                 )
             )
@@ -131,20 +126,15 @@ class Predictor:
     def _load_artifact(self, path: Path) -> object:
         """Load a model file that sits next to the configured model path, then check its schema.
 
-        joblib/pickle executes code on load, so the file must be one this service wrote: it has to
-        resolve inside the model directory (no symlink or ".." escape). The check below cannot make an
-        untrusted file safe; it only catches honest mismatches. A scikit-learn version mismatch is logged.
+        The file is read with skops and an explicit trusted-type list (see app/services/model_io.py), not
+        pickle. It must still resolve inside the model directory (no symlink or ".." escape) and be one this
+        service wrote: skops cannot make a tampered file safe to predict with (Tree is a trusted type).
         """
         root = os.path.realpath(self.model_path.absolute().parent)
         safe_path = os.path.realpath(os.path.join(root, path.name))
         if os.path.dirname(safe_path) != root or not safe_path.startswith(root + os.sep):
             raise ModelIncompatibleError("Model artifact is outside the model directory and was not loaded.")
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            loaded = joblib.load(safe_path)
-        for w in caught:
-            if "version" in str(w.message).lower():
-                logger.warning("model artifact %s loaded with a scikit-learn version warning: %s", path.name, w.message)
+        loaded = load_model(safe_path)
         check_model_compatible(loaded, path.name, self._registry_features())
         return loaded
 
