@@ -161,9 +161,9 @@ def latest_bar_date(session: Session, symbol: str) -> date | None:
 def create_rule(
     session: Session, user_id: int, symbol: str, direction: str, target_price: Decimal
 ) -> AlertRule:
-    from app.market_data.symbols import lookup_symbol
+    from app.market_data.symbols import lookup_symbol, normalize_symbol
 
-    normalized = symbol.strip().upper()
+    normalized = normalize_symbol(symbol)
     if direction not in ("above", "below"):
         raise AlertInputError("BAD_DIRECTION", "direction must be 'above' or 'below'")
     if target_price <= 0:
