@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import logging
 import re
 import warnings
@@ -8,7 +9,6 @@ from hashlib import sha256
 from pathlib import Path
 
 import joblib
-import numpy as np
 import pandas as pd
 
 from app.core.config import settings
@@ -135,13 +135,13 @@ class Predictor:
         resolve inside the model directory (no symlink or ".." escape). The check below cannot make an
         untrusted file safe; it only catches honest mismatches. A scikit-learn version mismatch is logged.
         """
-        root = self.model_path.absolute().parent.resolve()
-        resolved = path.resolve()
-        if root != resolved.parent:
+        root = os.path.realpath(self.model_path.absolute().parent)
+        safe_path = os.path.realpath(os.path.join(root, path.name))
+        if os.path.dirname(safe_path) != root or not safe_path.startswith(root + os.sep):
             raise ModelIncompatibleError("Model artifact is outside the model directory and was not loaded.")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            loaded = joblib.load(resolved)
+            loaded = joblib.load(safe_path)
         for w in caught:
             if "version" in str(w.message).lower():
                 logger.warning("model artifact %s loaded with a scikit-learn version warning: %s", path.name, w.message)
