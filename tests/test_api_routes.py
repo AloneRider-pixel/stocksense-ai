@@ -267,7 +267,14 @@ def test_public_market_overview_returns_configured_symbols(
 
     assert response.status_code == 200
     payload = response.json()
-    assert "Twelve Data" in payload["data_source"] and "Yahoo Finance" in payload["data_source"]
+    # The label is derived from the provider stored on the bars, never hardcoded.
+    stored = {row["source_provider"] for row in payload["symbols"]}
+    assert payload["source_providers"] == sorted(stored)
+    assert payload["is_sample_data"] == bool(stored) and stored <= api_routes._SAMPLE_TAGS
+    if payload["is_sample_data"]:
+        assert stored == {"CSVMarketDataProvider"}, stored  # csv provider has no name attr: class-name tag
+        assert "not live market data" in payload["data_source"] and "Twelve Data" not in payload["data_source"]
+        assert "Yahoo" not in payload["data_source"]
     assert "Not investment advice" in payload["disclaimer"]
     assert "SEBI" in payload["disclaimer"]
     symbols = payload["symbols"]
@@ -288,6 +295,39 @@ def test_public_market_overview_tolerates_missing_data(
 
     assert response.status_code == 200
     assert response.json()["symbols"] == []
+    assert response.json()["data_source"] == "no market data loaded"
+    assert response.json()["is_sample_data"] is False
+
+
+def test_public_market_overview_skips_an_unsupported_symbol_without_spending_the_ingest_budget(
+    client, fresh_overview_cache, monkeypatch
+):
+    asked = []
+    real = api_routes.get_provider_for_symbol
+
+    def recording(symbol):
+        asked.append(symbol)
+        return real(symbol)
+
+    monkeypatch.setattr(api_routes, "get_provider_for_symbol", recording)
+    monkeypatch.setattr(settings, "market_data_provider", "csv")
+    monkeypatch.setattr(settings, "market_data_symbols", "VOD.L,DEMO")
+    monkeypatch.setattr(settings, "nse_symbols", "")
+
+    response = client.get("/api/v1/public/market-overview")
+
+    assert response.status_code == 200
+    assert [row["symbol"] for row in response.json()["symbols"]] == ["DEMO"]
+    assert "VOD.L" not in asked  # never routed to a provider, so the shared ingest budget is untouched
+
+
+def test_symbols_endpoint_skips_an_unsupported_configured_symbol(client, auth_headers, monkeypatch):
+    headers, _ = auth_headers
+    monkeypatch.setattr(settings, "market_data_symbols", "VOD.L,DEMO")
+    monkeypatch.setattr(settings, "nse_symbols", "")
+    response = client.get("/api/v1/symbols", headers=headers)
+    assert response.status_code == 200
+    assert [row["symbol"] for row in response.json()] == ["DEMO"]
 
 
 @pytest.fixture()
@@ -575,3 +615,120 @@ def test_prediction_history_includes_baseline_close(
     records = response.json()
     assert len(records) == 1
     assert "baseline_close" in records[0]
+
+
+def test_describe_sources_never_launders_tags():
+    d = api_routes._describe_sources
+    assert d([]) == "no market data loaded"
+    assert "sample" in d([{"source_provider": "csv-sample"}])
+    assert "Twelve" not in d([{"source_provider": "csv-sample"}])
+    mixed = d([{"source_provider": "csv-sample"}, {"source_provider": "yfinance_nse"}])
+    assert "sample" in mixed and "yfinance_nse" in mixed
+    unknown = d([{"source_provider": "mystery-feed"}])
+    assert "unrecognized" in unknown and "unverified" in unknown and "mystery-feed" in unknown
+    assert "Yahoo" not in unknown and "Twelve" not in unknown
+
+
+def _seed_bars(session_factory, symbol, tags):
+    from datetime import date
+
+    from app.db.repository import MarketDataRepository
+
+    session = session_factory()
+    MarketDataRepository(session).upsert_many(
+        [
+            {"date": date(2026, 1, 2 + i), "symbol": symbol, "open": 1, "high": 2, "low": 1,
+             "close": 1 + i, "volume": 10, "source_provider": tag}
+            for i, tag in enumerate(tags)
+        ]
+    )
+    session.commit()
+    session.close()
+
+
+@pytest.mark.parametrize(
+    "tags,sample,has_sample,unknown,providers",
+    [
+        (["csv-sample", "csv-sample"], True, True, False, ["csv-sample"]),
+        (["csv-sample", "yfinance_nse"], False, True, False, ["csv-sample", "yfinance_nse"]),  # older sample bar, latest real tag
+        (["yfinance_nse", "mystery-feed"], False, False, True, ["mystery-feed", "yfinance_nse"]),
+        (["yfinance_nse", "yfinance_nse"], False, False, False, ["yfinance_nse"]),
+    ],
+)
+def test_overview_source_flags_cover_whole_stored_history(
+    client, fresh_overview_cache, session_factory, monkeypatch, tags, sample, has_sample, unknown, providers
+):
+    monkeypatch.setattr(settings, "market_data_symbols", "PROV")
+    monkeypatch.setattr(settings, "nse_symbols", "")
+    _seed_bars(session_factory, "PROV", tags)
+    p = client.get("/api/v1/public/market-overview").json()
+    assert p["source_providers"] == providers
+    assert (p["is_sample_data"], p["has_sample_data"], p["has_unrecognized_source"]) == (sample, has_sample, unknown)
+    if unknown:
+        assert "unverified" in p["data_source"]
+    if has_sample:
+        assert "not live market data" in p["data_source"]
+
+
+def test_predict_with_incompatible_saved_model_is_503_and_leaves_the_artifact_alone(
+    client, auth_headers, fake_cache, monkeypatch, tmp_path
+):
+    import joblib
+    import pandas as pd
+    from sklearn.ensemble import RandomForestRegressor
+
+    from app.services.predictor import Predictor
+
+    headers, _ = auth_headers
+    artifact = tmp_path / "old.joblib"
+    X = pd.DataFrame({"legacy_a": [1.0, 2, 3, 4, 5, 6], "legacy_b": [2.0, 1, 4, 3, 6, 5]})
+    joblib.dump(RandomForestRegressor(n_estimators=3, random_state=0).fit(X, [1, 2, 3, 4, 5, 6]), artifact)
+    before = artifact.read_bytes()
+    monkeypatch.setattr(api_routes, "predictor", Predictor(model_path=artifact, registry_path=tmp_path / "r.json"))
+
+    response = client.post(
+        "/api/v1/predict",
+        headers=headers,
+        json={"symbol": "DEMO", "history": history_payload(25)},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "MODEL_INCOMPATIBLE"
+    assert artifact.read_bytes() == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["old.joblib"]
+
+
+def test_exchange_suffixed_unregistered_symbols_are_422_not_us(client, auth_headers, stub_predictor, fake_cache):
+    headers, _ = auth_headers
+    for sym in ["RELIANCE.BO", "VOD.L"]:
+        r = client.post("/api/v1/predict", headers=headers, json={"symbol": sym, "history": history_payload()})
+        assert r.status_code == 422, sym
+        assert r.json()["error"]["code"] == "UNSUPPORTED_SYMBOL"
+    ok = client.post("/api/v1/predict", headers=headers, json={"symbol": "reliance.ns", "history": history_payload()})
+    assert ok.status_code == 200 and ok.json()["symbol"] == "RELIANCE"
+
+
+def test_evaluation_unevaluable_counts_are_user_scoped_and_reach_the_routes(client, session_factory, auth_headers):
+    from datetime import date
+    from app.auth.service import AuthService
+    from app.db.models import PredictionRecord
+
+    headers, user_a = auth_headers
+    session = session_factory()
+    try:
+        user_b = AuthService(session).register(email="b@example.com", password="an0ther-secret", full_name=None)
+        b_headers = {"Authorization": f"Bearer {AuthService.issue_token(user_b)}"}
+        for sym in ("VOD.L", "DEMO", "AAPL"):
+            session.add(PredictionRecord(user_id=user_a.id, symbol=sym, prediction_date=date(2026, 11, 20),
+                                         predicted_close=1.0, expected_change_pct=0.0, model="t"))
+        session.commit()
+    finally:
+        session.close()
+
+    a = client.get("/api/v1/predictions/evaluation", headers=headers).json()
+    assert a["pending_unevaluable"] == 1 and a["pending_unevaluable_symbols"] == ["VOD.L"], a
+    assert a["evaluated_predictions"] == 0
+    b = client.get("/api/v1/predictions/evaluation", headers=b_headers).json()
+    assert b["pending_unevaluable"] == 0 and b["pending_unevaluable_symbols"] == []
+    hist = {h["symbol"]: h["unevaluable"] for h in client.get("/api/v1/predictions", headers=headers).json()}
+    assert hist == {"VOD.L": True, "DEMO": False, "AAPL": False}, hist  # supported non-NSE symbols are scored, not "unevaluable"
