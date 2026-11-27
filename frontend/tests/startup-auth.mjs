@@ -205,6 +205,7 @@ try {
     await dash(page, {symbols:[{symbol:'GOLD',name:'Gold',currency:'USD',source_provider:'yfinance_nse',source_providers:['csv-sample','mystery-feed','yfinance_nse']}],data_source:"checked-in sample data (not live market data); unrecognized source tag 'mystery-feed' (unverified); daily bars recorded as yfinance_nse",is_sample_data:false,has_sample_data:true,has_unrecognized_source:true});
     const w=await page.getByTestId('source-warning').innerText();
     assert.match(w,/Some symbols use sample data/); assert.match(w,/unrecognized source tag/);
+    await page.getByTestId('chart-source').filter({hasText:'shown: fixture'}).waitFor(); // bars load after the chart caption first renders
     const cap=await page.getByTestId('chart-source').innerText();
     assert.match(cap,/Source tags recorded on the bars shown: fixture/);
     assert.match(cap,/all tags stored for GOLD: csv-sample, mystery-feed, yfinance_nse/);
