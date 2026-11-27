@@ -105,7 +105,7 @@ class MarketDataRepository:
         from app.market_data.base import MarketBar, drop_incomplete_bars
         from app.market_data.symbols import UnsupportedSymbolError, describe_symbol
 
-        rows = self.list_history(symbol, limit=limit + 1)  # +1: the open-session bar may be dropped, still return `limit` rows
+        rows = self.list_history(symbol, limit=limit + 3)  # spare rows: the current (and for rolling markets the previous) day may be dropped
         try:
             info = describe_symbol(symbol)
         except UnsupportedSymbolError:
