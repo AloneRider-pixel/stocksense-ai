@@ -41,4 +41,5 @@ class PredictionHistoryItem(BaseModel):
     direction_correct: bool | None
     evaluated_at: datetime | None
     baseline_close: float | None = None
+    unevaluable: bool = False  # pending forever: symbol is not supported for scoring
     created_at: datetime
