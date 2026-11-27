@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from app.db.models import MarketBarRecord, WatchlistItem
+from app.db.models import MarketBarRecord
 from scripts.report_suffixed_symbols import find_suffixed_symbols
 
 
