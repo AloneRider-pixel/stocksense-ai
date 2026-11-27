@@ -329,3 +329,25 @@ def test_notification_text_uses_two_decimal_prices(session_factory):
     note = session.query(Notification).one()
     assert "2,500.00" in note.title
     assert "2,510.00" in note.body
+
+
+def test_alert_closes_are_exchange_aware_not_just_an_ist_date_ceiling(session_factory):
+    """A US bar dated today (New York) is still open at 11:00 ET even though the IST date rule would pass it."""
+    from datetime import date, datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    from app.db.models import MarketBarRecord
+    from app.services.alerts import _recent_closes
+
+    def bar(sym, d):
+        return MarketBarRecord(symbol=sym, date=d, open=1, high=1, low=1, close=1, volume=1, source_provider="t",
+                               ingested_at=datetime(2026, 11, 20, tzinfo=timezone.utc))
+
+    now = datetime(2026, 11, 25, 21, 30, tzinfo=ZoneInfo("Asia/Kolkata"))  # 11:00 ET on 2026-11-25, 21:30 IST same day
+    with session_factory() as db:
+        db.add_all([bar("AAPL", date(2026, 11, 24)), bar("AAPL", date(2026, 11, 25)),
+                    bar("RELIANCE", date(2026, 11, 24)), bar("RELIANCE", date(2026, 11, 25))])
+        db.commit()
+        assert [d.day for d, _ in _recent_closes(db, "AAPL", limit=2, now=now)] == [24]      # US session still open
+        assert [d.day for d, _ in _recent_closes(db, "RELIANCE", limit=2, now=now)] == [25, 24]  # NSE closed 6h ago
+        assert _recent_closes(db, "VOD.L", limit=2, now=now) == []
