@@ -31,6 +31,10 @@ METALS_FX_SYMBOLS: dict[str, tuple[str, str]] = {
 }
 
 
+# Fetch a few extra bars: the newest ones may be dropped as not final, and the caller still wants `limit`.
+_HOLD_BACK_BARS = 3
+
+
 class MetalsFXProvider:
     name = "metals_fx"
 
@@ -46,13 +50,13 @@ class MetalsFXProvider:
 
         if settings.twelve_data_api_key:
             try:
-                bars = self._twelve_data.history(td_symbol, limit=limit)
-                return self._final_only([self._as_display_symbol(bar, normalized) for bar in bars], normalized)
+                bars = self._twelve_data.history(td_symbol, limit=limit + _HOLD_BACK_BARS)
+                return self._final_only([self._as_display_symbol(bar, normalized) for bar in bars], normalized)[-limit:]
             except TwelveDataError:
                 pass  # fall through to Yahoo
 
-        bars = self._yfinance.history(yf_symbol, limit=limit)
-        return self._final_only([self._as_display_symbol(bar, normalized) for bar in bars], normalized)
+        bars = self._yfinance.history(yf_symbol, limit=limit + _HOLD_BACK_BARS)
+        return self._final_only([self._as_display_symbol(bar, normalized) for bar in bars], normalized)[-limit:]
 
     @staticmethod
     def _final_only(bars: list[MarketBar], display_symbol: str) -> list[MarketBar]:
