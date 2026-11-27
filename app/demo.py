@@ -153,7 +153,7 @@ def _train_live_symbol_models(session) -> int:
         model_path = MODELS_DIR / f"stocksense_rf_{symbol}.joblib"
         if model_path.exists():
             continue
-        rows = repository.list_history(symbol, limit=LIVE_MODEL_ROWS)
+        rows = repository.list_history_excluding_open_session(symbol, limit=LIVE_MODEL_ROWS)
         if len(rows) < LIVE_MODEL_MIN_ROWS:
             continue
         frame = build_training_frame(
