@@ -673,16 +673,16 @@ def test_overview_source_flags_cover_whole_stored_history(
 def test_predict_with_incompatible_saved_model_is_503_and_leaves_the_artifact_alone(
     client, auth_headers, fake_cache, monkeypatch, tmp_path
 ):
-    import joblib
     import pandas as pd
     from sklearn.ensemble import RandomForestRegressor
 
+    from app.services.model_io import save_model
     from app.services.predictor import Predictor
 
     headers, _ = auth_headers
-    artifact = tmp_path / "old.joblib"
+    artifact = tmp_path / "old.skops"
     X = pd.DataFrame({"legacy_a": [1.0, 2, 3, 4, 5, 6], "legacy_b": [2.0, 1, 4, 3, 6, 5]})
-    joblib.dump(RandomForestRegressor(n_estimators=3, random_state=0).fit(X, [1, 2, 3, 4, 5, 6]), artifact)
+    save_model(RandomForestRegressor(n_estimators=3, random_state=0).fit(X, [1, 2, 3, 4, 5, 6]), artifact)
     before = artifact.read_bytes()
     monkeypatch.setattr(api_routes, "predictor", Predictor(model_path=artifact, registry_path=tmp_path / "r.json"))
 
@@ -695,7 +695,7 @@ def test_predict_with_incompatible_saved_model_is_503_and_leaves_the_artifact_al
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "MODEL_INCOMPATIBLE"
     assert artifact.read_bytes() == before
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["old.joblib"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["old.skops"]
 
 
 def test_exchange_suffixed_unregistered_symbols_are_422_not_us(client, auth_headers, stub_predictor, fake_cache):
