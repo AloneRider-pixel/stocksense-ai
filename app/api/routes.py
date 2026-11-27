@@ -94,7 +94,7 @@ _OVERVIEW_INGEST_BUDGET = 8
 
 
 def _latest_bars(repository: MarketDataRepository, symbol: str) -> list:
-    return repository.list_history(symbol, limit=2)
+    return repository.list_history_excluding_open_session(symbol, limit=2)
 
 
 @router.get(
