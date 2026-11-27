@@ -133,13 +133,21 @@ export default function Landing({ onSignIn, onRegister, onDemo, demoBusy, demoEr
               ))}
         </div>
         <p className="ticker-source">
-          {predictions.length > 0
-            ? "Latest stored forecasts · may include pending and scored records"
-            : overview?.is_sample_data
+          {(() => {
+            const sampleNote = overview?.is_sample_data
               ? "Sample data only (not live market data)"
-              : overview?.data_source
-                ? "Market data · " + overview.data_source + " · may be delayed"
-                : "No market data loaded yet"}
+              : overview?.has_sample_data
+                ? "Includes sample data (not live market data)"
+                : null;
+            if (predictions.length > 0) {
+              const base = "Latest stored forecasts · may include pending and scored records";
+              return sampleNote ? base + " · " + sampleNote : base;
+            }
+            if (sampleNote) return sampleNote;
+            return overview?.data_source
+              ? "Market data · " + overview.data_source + " · may be delayed"
+              : "No market data loaded yet";
+          })()}
         </p>
       </header>
 
