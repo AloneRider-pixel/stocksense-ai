@@ -132,8 +132,7 @@ export default function App() {
       <>
         {IS_DEMO && (
           <div className="demo-banner">
-            Market data: Twelve Data (US) and Yahoo Finance (NSE) daily bars, may be
-            delayed. Research and engineering project. Not investment advice. Not a SEBI-registered research analyst or investment adviser. Past model performance does not indicate future results. Do not trade on this.
+            Source labels show the provider recorded on the stored data, not an independent check, and market data may be delayed. Research and engineering project. Not investment advice. Not a SEBI-registered research analyst or investment adviser. Past model performance does not indicate future results. Do not trade on this.
           </div>
         )}
         <Dashboard user={user} onSignOut={signOut} />
