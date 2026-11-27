@@ -52,8 +52,8 @@ class MetalsFXProvider:
             try:
                 bars = self._twelve_data.history(td_symbol, limit=limit + _HOLD_BACK_BARS)
                 return self._final_only([self._as_display_symbol(bar, normalized) for bar in bars], normalized)[-limit:]
-            except TwelveDataError:
-                pass  # fall through to Yahoo
+            except (TwelveDataError, YFinanceError):
+                pass  # fall through to Yahoo (also when every Twelve Data bar is still unfinished)
 
         bars = self._yfinance.history(yf_symbol, limit=limit + _HOLD_BACK_BARS)
         return self._final_only([self._as_display_symbol(bar, normalized) for bar in bars], normalized)[-limit:]
