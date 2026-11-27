@@ -221,8 +221,8 @@ aside {
   flex-shrink: 0;
 }
 aside nav { display: grid; gap: 6px; }
-aside nav a { padding: 12px 14px; color: #7f93ad; border-radius: 10px; font-size: 14px; cursor: pointer; }
-aside nav a.active, aside nav a:hover { color: #edf4ff; background: #13223c; text-decoration: none; }
+aside nav a, aside nav button { padding: 12px 14px; color: #7f93ad; border-radius: 10px; font-size: 14px; cursor: pointer; }
+aside nav a.active, aside nav a:hover, aside nav button.active, aside nav button:hover { color: #edf4ff; background: #13223c; text-decoration: none; }
 .aside-note { color: #596f8a; font-size: 12px; line-height: 1.6; margin: 0 4px; }
 .ghost {
   margin-top: auto;
@@ -730,5 +730,6 @@ aside nav a.active, aside nav a:hover { color: #edf4ff; background: #13223c; tex
 .data-health-card dt { color: #9eacc2; margin-top: 12px; font-size: 13px; }
 .data-health-card dd { margin: 4px 0 0; color: #f2f6ff; }
 .data-health a { color: #91c2ff; text-decoration: underline; }
-.app-shell aside nav button { background: transparent; color: inherit; border: 0; text-align: left; padding: 10px 14px; cursor: pointer; font: inherit; }
-.app-shell aside nav button.active { background: #183452; border-radius: 8px; }
+.app-shell aside nav button { background: transparent; color: #7f93ad; border: 0; text-align: left; padding: 12px 14px; cursor: pointer; font: inherit; font-size: 14px; border-radius: 10px; }
+.app-shell aside nav button.active, .app-shell aside nav button:hover { color: #edf4ff; background: #13223c; }
+.app-shell aside nav button:focus-visible { outline: 2px solid #5aa9ff; outline-offset: 2px; }
