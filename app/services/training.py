@@ -5,12 +5,12 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-import joblib
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 
 from app.market_data.factory import get_market_data_provider
 from app.services.features import FEATURE_COLUMNS, build_training_frame
+from app.services.model_io import save_model
 from app.services.walk_forward import walk_forward_evaluate, write_walk_forward_artifacts
 
 
@@ -54,7 +54,7 @@ def load_market_frame(
 
 def train_model(
     data_path: str | None = "data/sample_prices.csv",
-    model_path: str = "models/stocksense_rf.joblib",
+    model_path: str = "models/stocksense_rf.skops",
     metrics_path: str = "models/metrics.json",
     registry_path: str = "models/registry.json",
     predictions_path: str = "models/walk_forward_predictions.csv",
@@ -105,7 +105,7 @@ def train_model(
 
     Path(model_path).parent.mkdir(parents=True, exist_ok=True)
     Path(registry_path).parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(final_model, model_path)
+    save_model(final_model, model_path)
     Path(registry_path).write_text(
         json.dumps(registry, indent=2),
         encoding="utf-8",
