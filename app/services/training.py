@@ -34,7 +34,9 @@ def load_market_frame(
         if provider_name == "csv":
             provider = CSVMarketDataProvider()
         elif provider_name == "twelve_data":
-            provider = TwelveDataProvider()
+            from app.market_data.factory import FinalBarsProvider
+
+            provider = FinalBarsProvider(TwelveDataProvider())
         else:
             raise ValueError(f"Unsupported provider: {provider_name}")
     else:
